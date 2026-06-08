@@ -61,6 +61,17 @@ const routes = [
   },
 ];
 
+const phaseBySkill = {
+  'product-spec-builder': 'Product Spec',
+  'design-brief-builder': 'Design Brief',
+  'design-maker': 'Design',
+  'dev-planner': 'Dev Plan',
+  'dev-builder': 'Build',
+  'bug-fixer': 'Bug Fix',
+  'code-review': 'Code Review',
+  'release-builder': 'Release',
+};
+
 function printHelp() {
   console.log(`AI PM Dev Agent v0.3 task starter
 
@@ -148,14 +159,28 @@ ${task}
 `;
 }
 
-function savePrompt(target, prompt) {
+function savePrompt(target, prompt, task, route) {
   if (!existsSync(target)) {
     throw new Error(`Target directory does not exist: ${target}`);
   }
-  const promptPath = join(resolve(target), 'memory', 'current-task-prompt.md');
+  const targetRoot = resolve(target);
+  const promptPath = join(targetRoot, 'memory', 'current-task-prompt.md');
+  const statePath = join(targetRoot, '.ai-pm-dev', 'state.json');
+  const state = {
+    version: '0.4.0',
+    task,
+    skill: route.skill,
+    phase: phaseBySkill[route.skill] ?? 'Unknown',
+    skillPath: `skills/${route.skill}/SKILL.md`,
+    nextStep: route.instruction,
+    updatedAt: new Date().toISOString(),
+  };
+
   mkdirSync(dirname(promptPath), { recursive: true });
+  mkdirSync(dirname(statePath), { recursive: true });
   writeFileSync(promptPath, prompt, 'utf8');
-  return promptPath;
+  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  return { promptPath, statePath };
 }
 
 try {
@@ -170,8 +195,9 @@ try {
     const prompt = buildPrompt(options.task, route);
     console.log(prompt);
     if (options.save) {
-      const promptPath = savePrompt(options.target, prompt);
+      const { promptPath, statePath } = savePrompt(options.target, prompt, options.task, route);
       console.log(`Saved prompt: ${promptPath}`);
+      console.log(`Saved state: ${statePath}`);
     }
   }
 } catch (error) {

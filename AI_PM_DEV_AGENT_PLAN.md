@@ -2,7 +2,7 @@
 
 AI PM Dev Agent is a folder-based workflow system for personal AI product development.
 
-It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts.
+It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state.
 
 ## v0.1 Scope
 
@@ -30,6 +30,8 @@ ai-pm-dev/
   README.md
   package.json
   AI_PM_DEV_AGENT_PLAN.md
+  bin/
+    ai-pm-dev.mjs
   scripts/
     init-ai-pm-dev.mjs
     init-ai-pm-dev.ps1
@@ -59,6 +61,7 @@ ai-pm-dev/
   tests/
     init-ai-pm-dev.test.mjs
     start-task.test.mjs
+    agent-cli.test.mjs
 ```
 
 ## v0.2 Scope
@@ -78,6 +81,15 @@ ai-pm-dev/
 - Allow explicit routing with `--type`.
 - Save generated prompts to `memory/current-task-prompt.md`.
 - Add tests for route selection, explicit type selection, and prompt saving.
+
+## v0.4 Scope
+
+- Add a local `ai-pm-dev` Agent CLI.
+- Support `init`, `start`, and `status` commands.
+- Save task state in `.ai-pm-dev/state.json`.
+- Expose the CLI through `package.json` `bin`.
+- Keep lower-level scripts available as implementation details.
+- Add tests for CLI init, task start, and status.
 
 ## First Real Test
 
@@ -101,6 +113,6 @@ The first refinement comes from the FitMind project workflow:
 
 ## Usage Model
 
-Recommended: run the initializer against the project being developed, then start the AI coding tool in that root and ask it to read `CLAUDE.md`.
+Recommended: run `ai-pm-dev init`, then `ai-pm-dev start --save`, then paste the generated prompt into Codex or Claude Code from the target project root.
 
 Manual fallback: copy the workflow files into the project root. Keeping `ai-pm-dev/` as a separate reference folder still works, but is less reliable because the rules are outside the active project root.

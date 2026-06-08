@@ -1,11 +1,14 @@
 {
   "name": "ai-pm-dev",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs",
+    "test": "node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs",
     "init": "node scripts/init-ai-pm-dev.mjs",
     "start-task": "node scripts/start-task.mjs"
+  },
+  "bin": {
+    "ai-pm-dev": "./bin/ai-pm-dev.mjs"
   }
 }
