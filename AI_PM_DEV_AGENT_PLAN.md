@@ -28,6 +28,7 @@ It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made A
 ai-pm-dev/
   CLAUDE.md
   README.md
+  README.zh-CN.md
   package.json
   AI_PM_DEV_AGENT_PLAN.md
   bin/
