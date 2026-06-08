@@ -1,10 +1,11 @@
 {
   "name": "ai-pm-dev",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/init-ai-pm-dev.test.mjs",
-    "init": "node scripts/init-ai-pm-dev.mjs"
+    "test": "node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs",
+    "init": "node scripts/init-ai-pm-dev.mjs",
+    "start-task": "node scripts/start-task.mjs"
   }
 }

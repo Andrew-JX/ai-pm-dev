@@ -1,12 +1,12 @@
 # AI PM Dev Agent
 
-A folder-based AI product development workflow system with a one-command project initializer.
+A folder-based AI product development workflow system with a one-command project initializer and task prompt starter.
 
-v0.2 focuses on making the workflow easy to install into real projects. It copies reusable rules and Skills that can be read by Claude Code, Codex, or other AI coding tools, then routes common product development tasks into stable workflows: specification, design, planning, implementation, debugging, review, and release.
+v0.3 focuses on making the workflow easier to start after installation. It copies reusable rules and Skills into real projects, then generates task-specific prompts that route common product development work into stable workflows: specification, design, planning, implementation, debugging, review, and release.
 
 ## Use
 
-AI PM Dev Agent v0.2 does not need a server, UI, hooks, or automation.
+AI PM Dev Agent v0.3 does not need a server, UI, hooks, or automation.
 
 Recommended on Windows PowerShell:
 
@@ -57,10 +57,38 @@ node scripts/init-ai-pm-dev.mjs --target /path/to/project --force
 
 Manual fallback: copy `CLAUDE.md`, `skills/`, `templates/`, and `memory/` into the project root yourself.
 
-## First Prompt Template
+## Start A Task
+
+After initialization, you can generate the prompt for the next AI coding conversation:
+
+```powershell
+.\scripts\start-task.ps1 -Task "我想开始实现登录功能，请先给技术计划"
+```
+
+Cross-platform Node usage:
+
+```bash
+node scripts/start-task.mjs --task "我想开始实现登录功能，请先给技术计划"
+```
+
+Force a route when needed:
+
+```bash
+node scripts/start-task.mjs --type bug --task "页面提交后报 500"
+```
+
+Save the generated prompt into a project:
+
+```bash
+node scripts/start-task.mjs --task "准备发布这个版本" --target /path/to/project --save
+```
+
+This writes `memory/current-task-prompt.md`.
+
+## Manual Prompt Template
 
 ```text
-你现在在一个使用 AI PM Dev Agent v0.2 的项目里工作。
+你现在在一个使用 AI PM Dev Agent v0.3 的项目里工作。
 
 开始任务前请先：
 1. 阅读 CLAUDE.md
@@ -118,7 +146,7 @@ Optional:
 
 ## Current Version
 
-v0.2 is intentionally simple: files, Skills, templates, memory logs, and one initializer.
+v0.3 is intentionally simple: files, Skills, templates, memory logs, one initializer, and one task prompt starter.
 
 ## Lessons From FitMind
 

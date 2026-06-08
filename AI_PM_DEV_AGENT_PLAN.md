@@ -2,7 +2,7 @@
 
 AI PM Dev Agent is a folder-based workflow system for personal AI product development.
 
-It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying.
+It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts.
 
 ## v0.1 Scope
 
@@ -34,6 +34,9 @@ ai-pm-dev/
     init-ai-pm-dev.mjs
     init-ai-pm-dev.ps1
     init-ai-pm-dev.sh
+    start-task.mjs
+    start-task.ps1
+    start-task.sh
   skills/
     product-spec-builder/
       SKILL.md
@@ -55,6 +58,7 @@ ai-pm-dev/
   memory/
   tests/
     init-ai-pm-dev.test.mjs
+    start-task.test.mjs
 ```
 
 ## v0.2 Scope
@@ -66,6 +70,14 @@ ai-pm-dev/
 - Preserve existing target `memory/*.md` logs.
 - Support `--dry-run`, `--force`, and `--include-readme`.
 - Add no-dependency tests for initialization behavior.
+
+## v0.3 Scope
+
+- Add a task starter that generates the next AI conversation prompt.
+- Route tasks to the 8 core Skills by simple keywords.
+- Allow explicit routing with `--type`.
+- Save generated prompts to `memory/current-task-prompt.md`.
+- Add tests for route selection, explicit type selection, and prompt saving.
 
 ## First Real Test
 
