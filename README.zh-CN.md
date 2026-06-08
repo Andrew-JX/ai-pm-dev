@@ -4,11 +4,14 @@
 
 AI PM Dev Agent 是一个本地 CLI Agent，用来把 AI 产品开发流程安装到任意项目里，并为 Codex / Claude Code 生成正确的任务 prompt。
 
-它不是网页应用，也不是后台服务。它现在做三件事：
+它不是网页应用，也不是后台服务。它现在做这些事：
 
 1. `init`：把 `CLAUDE.md`、`skills/`、`templates/`、`memory/` 安装到目标项目。
 2. `start`：根据你的任务自动选择 Skill，并生成可直接粘贴给 AI 编码工具的 prompt。
 3. `status`：查看当前任务阶段、Skill 和下一步。
+4. `doctor`：检查安装和目标项目是否准备好。
+5. `onboarding`：显示最短新手使用路径。
+6. `release-check`：显示发布前检查清单。
 
 ## 给普通用户的安装方式
 
@@ -24,6 +27,7 @@ npm install -g github:Andrew-JX/ai-pm-dev
 
 ```powershell
 ai-pm-dev --help
+ai-pm-dev doctor
 ```
 
 ### 方式 B：从 npm 安装
@@ -52,6 +56,7 @@ C:\Users\15942\Desktop\11
 
 ```powershell
 ai-pm-dev init "C:\Users\15942\Desktop\11"
+ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
 ```
 
 第二步，开始一个任务：
@@ -74,6 +79,9 @@ cd "C:\Users\15942\Desktop\11"
 ai-pm-dev init <目标项目路径>
 ai-pm-dev start "<任务描述>" --target <目标项目路径> --save
 ai-pm-dev status --target <目标项目路径>
+ai-pm-dev doctor --target <目标项目路径>
+ai-pm-dev onboarding
+ai-pm-dev release-check
 ```
 
 强制指定任务类型：
@@ -140,6 +148,30 @@ ai-pm-dev status --target "C:\Users\15942\Desktop\11"
 - Skill 文件路径
 - 下一步应该做什么
 
+## doctor 会做什么
+
+```powershell
+ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
+```
+
+它会检查当前包的核心文件、目标目录、目标项目初始化状态、8 个核心 Skill、任务 prompt 和任务状态文件。检查失败时会给出修复命令。
+
+## onboarding 会做什么
+
+```powershell
+ai-pm-dev onboarding
+```
+
+它会输出最短新手路径：初始化项目、开始任务、打开 prompt、交给 Codex / Claude Code。
+
+## release-check 会做什么
+
+```powershell
+ai-pm-dev release-check
+```
+
+它会输出发布前检查清单，包括 `npm test`、`npm pack --dry-run`、CLI help、doctor、README、CHANGELOG 和 package metadata 检查。
+
 ## 给开发者的本地运行方式
 
 只有开发这个工具本身时才需要这样用：
@@ -160,6 +192,6 @@ node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
 
 ## 当前边界
 
-v0.5 是一个可分发的本地 CLI Agent。
+v0.7 是一个可分发、可自检、有发布检查清单的本地 CLI Agent。
 
 它还不会自己打开 Codex / Claude Code，也不会自动替你执行代码修改。它负责安装规则、路由任务、生成 prompt、保存任务状态。

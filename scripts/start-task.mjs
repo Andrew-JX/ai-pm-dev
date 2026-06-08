@@ -72,7 +72,7 @@ const phaseBySkill = {
   'release-builder': 'Release',
 };
 
-const version = '0.5.0';
+const version = '0.7.0';
 
 function printHelp() {
   console.log(`AI PM Dev Agent v0.3 task starter

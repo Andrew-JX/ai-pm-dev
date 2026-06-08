@@ -4,11 +4,14 @@
 
 AI PM Dev Agent is a local CLI agent that installs AI product development workflows into any project and generates task prompts for Codex, Claude Code, or similar AI coding tools.
 
-It is not a web app or background service. It does three things:
+It is not a web app or background service. It does these things:
 
 1. `init`: installs `CLAUDE.md`, `skills/`, `templates/`, and `memory/` into a target project.
 2. `start`: routes a task to the right Skill and generates a prompt for your AI coding tool.
 3. `status`: shows the current task phase, Skill, and next step.
+4. `doctor`: checks whether the package and target project are ready.
+5. `onboarding`: prints the shortest beginner path.
+6. `release-check`: prints the release readiness checklist.
 
 ## Install
 
@@ -24,6 +27,7 @@ Then run from any directory:
 
 ```bash
 ai-pm-dev --help
+ai-pm-dev doctor
 ```
 
 ### Option B: Install From npm
@@ -52,6 +56,7 @@ Step 1, initialize the target project:
 
 ```bash
 ai-pm-dev init "C:\Users\15942\Desktop\11"
+ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
 ```
 
 Step 2, start a task:
@@ -74,6 +79,9 @@ Copy the content of `memory/current-task-prompt.md`.
 ai-pm-dev init <target-project>
 ai-pm-dev start "<task>" --target <target-project> --save
 ai-pm-dev status --target <target-project>
+ai-pm-dev doctor --target <target-project>
+ai-pm-dev onboarding
+ai-pm-dev release-check
 ```
 
 Force a route:
@@ -124,6 +132,31 @@ memory/current-task-prompt.md
 
 Paste `memory/current-task-prompt.md` into your AI coding tool.
 
+## What doctor Checks
+
+```bash
+ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
+```
+
+It checks package assets, target existence, target initialization, the 8 core Skills, generated task prompt, and task state. Failed checks include a fix command.
+
+## What onboarding Shows
+
+```bash
+ai-pm-dev onboarding
+```
+
+It prints the shortest beginner path: initialize a project, start a task, open the prompt, and paste it into Codex or Claude Code.
+
+## What release-check Shows
+
+```bash
+ai-pm-dev release-check
+```
+
+It prints the release checklist: `npm test`, `npm pack --dry-run`, CLI help, doctor, README checks, and package metadata checks.
+It also reminds you to verify `CHANGELOG.md`.
+
 ## Developer Usage
 
 Only use this form when developing this package itself:
@@ -144,6 +177,6 @@ That only works if the current folder contains `bin/ai-pm-dev.mjs`.
 
 ## Current Boundary
 
-v0.5 is a distributable local CLI agent.
+v0.7 is a distributable local CLI agent with self-check and release-check commands.
 
 It does not open Codex or Claude Code by itself, and it does not directly modify your application code. It installs workflow rules, routes tasks, generates prompts, and saves task state.

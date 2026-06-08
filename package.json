@@ -1,6 +1,6 @@
 {
   "name": "ai-pm-dev",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Local CLI agent for installing AI product development workflows and routing tasks.",
   "license": "MIT",
   "type": "module",
@@ -13,10 +13,11 @@
     "CLAUDE.md",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
     "AI_PM_DEV_AGENT_PLAN.md"
   ],
   "scripts": {
-    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs",
+    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs",
     "init": "node scripts/init-ai-pm-dev.mjs",
     "start-task": "node scripts/start-task.mjs"
   },

@@ -2,7 +2,7 @@
 
 AI PM Dev Agent is a folder-based workflow system for personal AI product development.
 
-It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state. v0.5 makes the CLI distributable through npm or GitHub installation.
+It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state. v0.5 makes the CLI distributable through npm or GitHub installation. v0.6 adds self-check and onboarding. v0.7 adds release readiness checks.
 
 ## v0.1 Scope
 
@@ -29,6 +29,7 @@ ai-pm-dev/
   CLAUDE.md
   README.md
   README.zh-CN.md
+  CHANGELOG.md
   package.json
   AI_PM_DEV_AGENT_PLAN.md
   bin/
@@ -63,6 +64,8 @@ ai-pm-dev/
     init-ai-pm-dev.test.mjs
     start-task.test.mjs
     agent-cli.test.mjs
+    doctor-release.test.mjs
+    package-metadata.test.mjs
 ```
 
 ## v0.2 Scope
@@ -99,6 +102,21 @@ ai-pm-dev/
 - Make the README start with real user installation commands.
 - Maintain separate English and Chinese README files.
 - Add tests for package metadata.
+
+## v0.6 Scope
+
+- Add `doctor` for package and target project self-checks.
+- Add `onboarding` for the shortest beginner path.
+- Improve recovery instructions when a target is not initialized.
+- Add tests for uninitialized and initialized target checks.
+
+## v0.7 Scope
+
+- Add `release-check` for publish readiness.
+- Add `CHANGELOG.md` for release notes.
+- Add npm pack dry-run coverage in tests.
+- Update package version to `0.7.0`.
+- Update English and Chinese README files with doctor and release-check usage.
 
 ## First Real Test
 
