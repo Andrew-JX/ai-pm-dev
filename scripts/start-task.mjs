@@ -72,6 +72,8 @@ const phaseBySkill = {
   'release-builder': 'Release',
 };
 
+const version = '0.5.0';
+
 function printHelp() {
   console.log(`AI PM Dev Agent v0.3 task starter
 
@@ -167,7 +169,7 @@ function savePrompt(target, prompt, task, route) {
   const promptPath = join(targetRoot, 'memory', 'current-task-prompt.md');
   const statePath = join(targetRoot, '.ai-pm-dev', 'state.json');
   const state = {
-    version: '0.4.0',
+    version,
     task,
     skill: route.skill,
     phase: phaseBySkill[route.skill] ?? 'Unknown',

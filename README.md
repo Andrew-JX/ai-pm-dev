@@ -2,69 +2,100 @@
 
 [中文文档](README.zh-CN.md)
 
-A local AI product development agent for installing workflow rules, routing tasks, and tracking the current task state.
+AI PM Dev Agent is a local CLI agent that installs AI product development workflows into any project and generates task prompts for Codex, Claude Code, or similar AI coding tools.
 
-v0.4 provides a local CLI agent. It installs reusable rules and Skills into real projects, generates task-specific prompts, routes work into the right Skill, and remembers the current task state.
+It is not a web app or background service. It does three things:
 
-## What It Is
+1. `init`: installs `CLAUDE.md`, `skills/`, `templates/`, and `memory/` into a target project.
+2. `start`: routes a task to the right Skill and generates a prompt for your AI coding tool.
+3. `status`: shows the current task phase, Skill, and next step.
 
-AI PM Dev Agent is currently a local workflow agent, not a hosted service.
+## Install
 
-It gives you:
+### Option A: Install From GitHub
 
-- `CLAUDE.md`: top-level routing rules.
-- `skills/`: task workflows for spec, design, planning, building, debugging, review, and release.
-- `templates/`: reusable output templates.
-- `memory/`: feedback and improvement logs.
-- `ai-pm-dev`: a local CLI that installs the workflow, starts tasks, and reads task state.
-
-## Correct Ways To Run It
-
-### Option A: Global Command, Recommended
-
-Run this once from the `ai-pm-dev` repository:
+Use this before the package is published to npm:
 
 ```bash
-cd E:\studyspace\ai-pm-dev
-npm link
+npm install -g github:Andrew-JX/ai-pm-dev
 ```
 
-Then you can run this from any folder:
+Then run from any directory:
+
+```bash
+ai-pm-dev --help
+```
+
+### Option B: Install From npm
+
+After npm publishing:
+
+```bash
+npm install -g ai-pm-dev
+```
+
+Then:
+
+```bash
+ai-pm-dev --help
+```
+
+## Three-Step Usage
+
+Assume your target project is:
+
+```text
+C:\Users\15942\Desktop\11
+```
+
+Step 1, initialize the target project:
 
 ```bash
 ai-pm-dev init "C:\Users\15942\Desktop\11"
+```
+
+Step 2, start a task:
+
+```bash
 ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --target "C:\Users\15942\Desktop\11" --save
-ai-pm-dev status --target "C:\Users\15942\Desktop\11"
 ```
 
-### Option B: Absolute Path, No Global Link
-
-Use this from any folder:
+Step 3, open the target project and paste the generated prompt into Codex or Claude Code:
 
 ```bash
-node E:\studyspace\ai-pm-dev\bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
+cd "C:\Users\15942\Desktop\11"
 ```
 
-### Option C: Repository-Relative, For Development
-
-This only works after you `cd` into the `ai-pm-dev` repository:
-
-```bash
-cd E:\studyspace\ai-pm-dev
-node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
-```
-
-This does not work from the target project unless that target project already contains `bin/ai-pm-dev.mjs`.
+Copy the content of `memory/current-task-prompt.md`.
 
 ## Commands
 
 ```bash
-ai-pm-dev init <target>
-ai-pm-dev start "<task>" --target <target> --save
-ai-pm-dev status --target <target>
+ai-pm-dev init <target-project>
+ai-pm-dev start "<task>" --target <target-project> --save
+ai-pm-dev status --target <target-project>
 ```
 
-`init` copies this workflow pack into the target project:
+Force a route:
+
+```bash
+ai-pm-dev start "The submit page returns 500" --type bug --target "C:\Users\15942\Desktop\11" --save
+```
+
+Supported types:
+
+```text
+spec
+brief
+design
+plan
+build
+bug
+review
+release
+```
+
+## What init Installs
 
 ```text
 your-project/
@@ -74,51 +105,45 @@ your-project/
   memory/
 ```
 
-It backs up an existing `CLAUDE.md` to `CLAUDE.ai-pm-dev-backup.md`, merges `skills/` and `templates/`, and does not overwrite existing `memory/*.md` logs.
+If `CLAUDE.md` already exists, it is backed up as:
 
-`start --save` writes:
+```text
+CLAUDE.ai-pm-dev-backup.md
+```
+
+Existing `memory/*.md` files are preserved.
+
+## What start Saves
+
+With `--save`, `start` writes:
 
 ```text
 memory/current-task-prompt.md
 .ai-pm-dev/state.json
 ```
 
-Then open Codex, Claude Code, or another AI coding tool from the target project root and paste the generated prompt.
+Paste `memory/current-task-prompt.md` into your AI coding tool.
 
-## Examples
+## Developer Usage
 
-```bash
-ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --target "C:\Users\15942\Desktop\11" --save
-```
+Only use this form when developing this package itself:
 
 ```bash
-ai-pm-dev start "页面提交后报 500" --type bug --target "C:\Users\15942\Desktop\11" --save
+cd E:\studyspace\ai-pm-dev
+node bin\ai-pm-dev.mjs --help
+node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
 ```
+
+Do not run this from a target project:
 
 ```bash
-ai-pm-dev status --target "C:\Users\15942\Desktop\11"
+node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
 ```
 
-## Lower-Level Scripts
+That only works if the current folder contains `bin/ai-pm-dev.mjs`.
 
-The CLI wraps these scripts:
+## Current Boundary
 
-- `scripts/init-ai-pm-dev.mjs`
-- `scripts/start-task.mjs`
+v0.5 is a distributable local CLI agent.
 
-Windows PowerShell wrappers are also available:
-
-```powershell
-.\scripts\init-ai-pm-dev.ps1 -Target "E:\path\to\your-project"
-.\scripts\start-task.ps1 -Task "I want a development plan first"
-```
-
-## Test
-
-```bash
-npm test
-```
-
-## Current Version
-
-v0.4 is intentionally simple: files, Skills, templates, memory logs, an initializer, a task starter, and a local Agent CLI with saved task state.
+It does not open Codex or Claude Code by itself, and it does not directly modify your application code. It installs workflow rules, routes tasks, generates prompts, and saves task state.

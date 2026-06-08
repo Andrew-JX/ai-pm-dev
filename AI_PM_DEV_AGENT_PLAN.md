@@ -2,7 +2,7 @@
 
 AI PM Dev Agent is a folder-based workflow system for personal AI product development.
 
-It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state.
+It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state. v0.5 makes the CLI distributable through npm or GitHub installation.
 
 ## v0.1 Scope
 
@@ -92,6 +92,14 @@ ai-pm-dev/
 - Keep lower-level scripts available as implementation details.
 - Add tests for CLI init, task start, and status.
 
+## v0.5 Scope
+
+- Remove package-private status so the CLI can be distributed.
+- Add package `files` metadata so installs include workflow assets.
+- Make the README start with real user installation commands.
+- Maintain separate English and Chinese README files.
+- Add tests for package metadata.
+
 ## First Real Test
 
 Use a small feature and run the full loop:
@@ -114,6 +122,6 @@ The first refinement comes from the FitMind project workflow:
 
 ## Usage Model
 
-Recommended: run `ai-pm-dev init`, then `ai-pm-dev start --save`, then paste the generated prompt into Codex or Claude Code from the target project root.
+Recommended: install globally with `npm install -g github:Andrew-JX/ai-pm-dev`, run `ai-pm-dev init`, then `ai-pm-dev start --save`, then paste the generated prompt into Codex or Claude Code from the target project root.
 
 Manual fallback: copy the workflow files into the project root. Keeping `ai-pm-dev/` as a separate reference folder still works, but is less reliable because the rules are outside the active project root.

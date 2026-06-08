@@ -5,9 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const version = '0.5.0';
 
 function printHelp() {
-  console.log(`AI PM Dev Agent v0.4
+  console.log(`AI PM Dev Agent v${version}
 
 Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
