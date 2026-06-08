@@ -10,8 +10,9 @@ AI PM Dev Agent 是一个本地 CLI Agent，用来把 AI 产品开发流程安�
 2. `start`：根据你的任务自动选择 Skill，并生成可直接粘贴给 AI 编码工具的 prompt。
 3. `status`：查看当前任务阶段、Skill 和下一步。
 4. `doctor`：检查安装和目标项目是否准备好。
-5. `onboarding`：显示最短新手使用路径。
-6. `release-check`：显示发布前检查清单。
+5. `config`：保存默认目标项目路径，之后不用每次写 `--target`。
+6. `onboarding`：显示最短新手使用路径。
+7. `release-check`：显示发布前检查清单。
 
 ## 给普通用户的安装方式
 
@@ -57,12 +58,13 @@ C:\Users\15942\Desktop\11
 ```powershell
 ai-pm-dev init "C:\Users\15942\Desktop\11"
 ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
 ```
 
 第二步，开始一个任务：
 
 ```powershell
-ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --target "C:\Users\15942\Desktop\11" --save
+ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --save
 ```
 
 第三步，进入目标项目，把生成的 prompt 给 Codex / Claude Code：
@@ -80,8 +82,20 @@ ai-pm-dev init <目标项目路径>
 ai-pm-dev start "<任务描述>" --target <目标项目路径> --save
 ai-pm-dev status --target <目标项目路径>
 ai-pm-dev doctor --target <目标项目路径>
+ai-pm-dev config set target <目标项目路径>
+ai-pm-dev config get
+ai-pm-dev config clear
 ai-pm-dev onboarding
 ai-pm-dev release-check
+```
+
+设置默认 target 后，可以省略 `--target`：
+
+```powershell
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+ai-pm-dev start "准备发布这个版本" --save
+ai-pm-dev status
+ai-pm-dev doctor
 ```
 
 强制指定任务类型：
@@ -156,6 +170,14 @@ ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
 
 它会检查当前包的核心文件、目标目录、目标项目初始化状态、8 个核心 Skill、任务 prompt 和任务状态文件。检查失败时会给出修复命令。
 
+## config 会做什么
+
+```powershell
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+```
+
+它会把默认目标项目保存到本机配置里。之后 `start`、`status`、`doctor` 都可以不写 `--target`。
+
 ## onboarding 会做什么
 
 ```powershell
@@ -192,6 +214,6 @@ node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
 
 ## 当前边界
 
-v0.7 是一个可分发、可自检、有发布检查清单的本地 CLI Agent。
+v0.8 是一个可分发、可自检、有发布检查清单、支持默认 target 配置的本地 CLI Agent。
 
 它还不会自己打开 Codex / Claude Code，也不会自动替你执行代码修改。它负责安装规则、路由任务、生成 prompt、保存任务状态。

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- Add `config get`, `config set target <path>`, and `config clear`.
+- Let `start`, `status`, and `doctor` use the configured target when `--target` is omitted.
+- Add isolated config tests using `AI_PM_DEV_HOME`.
+
 ## 0.7.0
 
 - Add `doctor` command for package and target project self-checks.

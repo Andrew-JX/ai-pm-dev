@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
-assert.equal(pkg.version, '0.7.0');
+assert.equal(pkg.version, '0.8.0');
 assert.equal(pkg.private, undefined);
 assert.equal(pkg.type, 'module');
 assert.equal(pkg.bin['ai-pm-dev'], './bin/ai-pm-dev.mjs');

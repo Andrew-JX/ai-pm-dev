@@ -2,7 +2,7 @@
 
 AI PM Dev Agent is a folder-based workflow system for personal AI product development.
 
-It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state. v0.5 makes the CLI distributable through npm or GitHub installation. v0.6 adds self-check and onboarding. v0.7 adds release readiness checks.
+It is not a chatbot, prompt collection, UI, or multi-agent platform. v0.1 made AI coding tools follow stable role, process, and quality rules during product development work. v0.2 adds a simple initializer so the workflow can be installed into real projects without manual copying. v0.3 adds a task prompt starter so users do not need to remember routing prompts. v0.4 adds a local Agent CLI with task state. v0.5 makes the CLI distributable through npm or GitHub installation. v0.6 adds self-check and onboarding. v0.7 adds release readiness checks. v0.8 adds local config with a default target project.
 
 ## v0.1 Scope
 
@@ -66,6 +66,7 @@ ai-pm-dev/
     agent-cli.test.mjs
     doctor-release.test.mjs
     package-metadata.test.mjs
+    config.test.mjs
 ```
 
 ## v0.2 Scope
@@ -117,6 +118,14 @@ ai-pm-dev/
 - Add npm pack dry-run coverage in tests.
 - Update package version to `0.7.0`.
 - Update English and Chinese README files with doctor and release-check usage.
+
+## v0.8 Scope
+
+- Add `config get`, `config set target <path>`, and `config clear`.
+- Store config in the user-level AI PM Dev config directory.
+- Support `AI_PM_DEV_HOME` for isolated tests and custom config homes.
+- Let `start`, `status`, and `doctor` use the configured target when `--target` is omitted.
+- Update docs and changelog.
 
 ## First Real Test
 

@@ -10,8 +10,9 @@ It is not a web app or background service. It does these things:
 2. `start`: routes a task to the right Skill and generates a prompt for your AI coding tool.
 3. `status`: shows the current task phase, Skill, and next step.
 4. `doctor`: checks whether the package and target project are ready.
-5. `onboarding`: prints the shortest beginner path.
-6. `release-check`: prints the release readiness checklist.
+5. `config`: stores a default target project path.
+6. `onboarding`: prints the shortest beginner path.
+7. `release-check`: prints the release readiness checklist.
 
 ## Install
 
@@ -57,12 +58,13 @@ Step 1, initialize the target project:
 ```bash
 ai-pm-dev init "C:\Users\15942\Desktop\11"
 ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
 ```
 
 Step 2, start a task:
 
 ```bash
-ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --target "C:\Users\15942\Desktop\11" --save
+ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --save
 ```
 
 Step 3, open the target project and paste the generated prompt into Codex or Claude Code:
@@ -80,8 +82,20 @@ ai-pm-dev init <target-project>
 ai-pm-dev start "<task>" --target <target-project> --save
 ai-pm-dev status --target <target-project>
 ai-pm-dev doctor --target <target-project>
+ai-pm-dev config set target <target-project>
+ai-pm-dev config get
+ai-pm-dev config clear
 ai-pm-dev onboarding
 ai-pm-dev release-check
+```
+
+After setting a default target, `--target` can be omitted:
+
+```bash
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+ai-pm-dev start "Prepare this release" --save
+ai-pm-dev status
+ai-pm-dev doctor
 ```
 
 Force a route:
@@ -140,6 +154,14 @@ ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
 
 It checks package assets, target existence, target initialization, the 8 core Skills, generated task prompt, and task state. Failed checks include a fix command.
 
+## What config Stores
+
+```bash
+ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+```
+
+This saves a default target project on your machine. After that, `start`, `status`, and `doctor` can run without `--target`.
+
 ## What onboarding Shows
 
 ```bash
@@ -177,6 +199,6 @@ That only works if the current folder contains `bin/ai-pm-dev.mjs`.
 
 ## Current Boundary
 
-v0.7 is a distributable local CLI agent with self-check and release-check commands.
+v0.8 is a distributable local CLI agent with self-check, release-check, and default target config.
 
 It does not open Codex or Claude Code by itself, and it does not directly modify your application code. It installs workflow rules, routes tasks, generates prompts, and saves task state.

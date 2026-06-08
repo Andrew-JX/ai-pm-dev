@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const version = '0.7.0';
+const version = '0.8.0';
 const requiredSkills = [
   'product-spec-builder',
   'design-brief-builder',
@@ -25,6 +26,9 @@ Usage:
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev status [--target <path>]
   ai-pm-dev doctor [--target <path>]
+  ai-pm-dev config get
+  ai-pm-dev config set target <path>
+  ai-pm-dev config clear
   ai-pm-dev onboarding
   ai-pm-dev release-check
 
@@ -33,6 +37,7 @@ Commands:
   start          Route a task, generate the AI prompt, and optionally save task state.
   status         Show the saved task state for a target project.
   doctor         Check the package and optional target project setup.
+  config         Store or inspect default CLI settings.
   onboarding     Show the shortest beginner path.
   release-check  Show release readiness checks.
 `);
@@ -52,7 +57,31 @@ function parseTarget(args) {
   if (targetIndex >= 0) {
     return args[targetIndex + 1] ?? process.cwd();
   }
-  return process.cwd();
+  return readConfig().defaultTarget ?? process.cwd();
+}
+
+function configDir() {
+  return process.env.AI_PM_DEV_HOME
+    ? resolve(process.env.AI_PM_DEV_HOME)
+    : join(homedir(), '.ai-pm-dev');
+}
+
+function configPath() {
+  return join(configDir(), 'config.json');
+}
+
+function readConfig() {
+  const path = configPath();
+  if (!existsSync(path)) {
+    return {};
+  }
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function writeConfig(config) {
+  const path = configPath();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
 function formatCheck(name, pass, fix = '') {
@@ -73,7 +102,10 @@ function runStart(args) {
   if (!task || task.startsWith('-')) {
     throw new Error('Usage: ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]');
   }
-  return runNodeScript('start-task.mjs', ['--task', task, ...rest]);
+  const hasTarget = rest.includes('--target');
+  const defaultTarget = readConfig().defaultTarget;
+  const targetArgs = hasTarget || !defaultTarget ? [] : ['--target', defaultTarget];
+  return runNodeScript('start-task.mjs', ['--task', task, ...targetArgs, ...rest]);
 }
 
 function runStatus(args) {
@@ -182,6 +214,42 @@ Suggested commands:
 `;
 }
 
+function runConfig(args) {
+  const [action, key, ...rest] = args;
+  if (!action || action === 'get') {
+    const config = readConfig();
+    if (!config.defaultTarget) {
+      return `No default target configured.\nSet one with: ai-pm-dev config set target "<project-path>"\n`;
+    }
+    return `AI PM Dev Config
+
+Config file: ${configPath()}
+Default target: ${config.defaultTarget}
+`;
+  }
+
+  if (action === 'set' && key === 'target') {
+    const target = rest.join(' ');
+    if (!target) {
+      throw new Error('Usage: ai-pm-dev config set target <path>');
+    }
+    const resolvedTarget = resolve(target);
+    writeConfig({
+      ...readConfig(),
+      defaultTarget: resolvedTarget,
+      updatedAt: new Date().toISOString(),
+    });
+    return `Default target saved: ${resolvedTarget}\nConfig file: ${configPath()}\n`;
+  }
+
+  if (action === 'clear') {
+    rmSync(configPath(), { force: true });
+    return 'AI PM Dev config cleared.\n';
+  }
+
+  throw new Error('Usage: ai-pm-dev config get | config set target <path> | config clear');
+}
+
 try {
   const [command, ...args] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h') {
@@ -194,6 +262,8 @@ try {
     process.stdout.write(runStatus(args));
   } else if (command === 'doctor') {
     process.stdout.write(runDoctor(args));
+  } else if (command === 'config') {
+    process.stdout.write(runConfig(args));
   } else if (command === 'onboarding') {
     process.stdout.write(runOnboarding());
   } else if (command === 'release-check') {
