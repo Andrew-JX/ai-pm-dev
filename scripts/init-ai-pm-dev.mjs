@@ -198,10 +198,15 @@ function initialize(options) {
   for (const action of actions) {
     console.log(`- ${action}`);
   }
+  if (options.dryRun) {
+    return;
+  }
   console.log('');
-  console.log('Next prompt:');
-  console.log('请先阅读 AGENTS.md（项目操作层入口），并按其中的 AI PM Dev Agent 流程工作。');
-  console.log('当前任务是：...');
+  console.log('Next steps:');
+  console.log('  ai-pm-dev prd       # run the PM interview (add --lang zh for Chinese)');
+  console.log('  ai-pm-dev doctor    # see which docs still need filling');
+  console.log('');
+  console.log('Then open this folder in Claude Code / Codex — they read AGENTS.md and continue.');
 }
 
 try {

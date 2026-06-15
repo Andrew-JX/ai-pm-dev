@@ -92,7 +92,11 @@ already exist they are backed up as `*.ai-pm-dev-backup.md`.
 ai-pm-dev prd --lang zh                 # interview in Chinese (default: en, or asks)
 ai-pm-dev prd --type consumer           # skip AI-only questions for a non-AI product
 ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
+ai-pm-dev prd --from-note idea.md       # seed the idea from a note/chat log, skip retyping it
 ```
+
+With `--from-note`, the first line of the file becomes the idea, the rest is saved as
+`source-note.md` in the session, and the remaining questions are still asked.
 
 `prd check` reports `PASS/WARN/FAIL`. For a product with no AI, AI-specific gaps are **WARN
 ("mark not-applicable")**, not FAIL.
@@ -114,7 +118,7 @@ ai-pm-dev note "finished the end-to-end happy path"
 
 ```bash
 ai-pm-dev init <target>
-ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <...>] [--from-note <file>]
 ai-pm-dev prd status [--target <target>]
 ai-pm-dev prd check [--target <target>]
 ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]

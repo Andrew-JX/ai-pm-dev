@@ -87,7 +87,11 @@ my-product/
 ai-pm-dev prd --lang zh                 # 中文访谈（默认 en，未指定时会询问）
 ai-pm-dev prd --type consumer           # 无 AI 的产品，跳过 AI 专属问题
 ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
+ai-pm-dev prd --from-note idea.md       # 从已有的想法/聊天记录导入，不用重打一遍
 ```
+
+用 `--from-note` 时，文件第一行作为想法，其余内容存为 session 里的 `source-note.md`，
+其它问题照常会问。
 
 `prd check` 输出 `PASS/WARN/FAIL`。对于不含 AI 的产品，AI 相关缺口是 **WARN（提示“标记为不适用”）**，
 而不是 FAIL。
@@ -109,7 +113,7 @@ ai-pm-dev note "完成端到端主流程"
 
 ```bash
 ai-pm-dev init <target>
-ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <...>] [--from-note <file>]
 ai-pm-dev prd status [--target <target>]
 ai-pm-dev prd check [--target <target>]
 ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]

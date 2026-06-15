@@ -25,7 +25,7 @@ function printHelp() {
 
 Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
-  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>]
   ai-pm-dev prd status [--target <path>]
   ai-pm-dev prd check [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
@@ -719,7 +719,7 @@ function latestPrdSession(target) {
   return latest ? join(sessionsRoot, latest) : '';
 }
 
-function writePrdAssets(target, answers) {
+function writePrdAssets(target, answers, sourceNote = '') {
   if (!existsSync(target)) {
     throw new Error(`Target directory does not exist: ${target}`);
   }
@@ -747,6 +747,9 @@ function writePrdAssets(target, answers) {
     'risks.md': buildRisksDoc(answers),
     'acceptance-tests.md': buildAcceptanceTests(answers),
   };
+  if (sourceNote) {
+    files['source-note.md'] = `# Source Note\n\nImported via \`ai-pm-dev prd --from-note\`.\n\n${sourceNote}\n`;
+  }
 
   mkdirSync(sessionPath, { recursive: true });
   for (const [name, content] of Object.entries(files)) {
@@ -827,23 +830,53 @@ function parsePrdType(args) {
   return value;
 }
 
+// First meaningful line of a note, used as the idea headline (full note is saved separately).
+function firstLine(text) {
+  const line = text.split(/\r?\n/).map((value) => value.trim()).find(Boolean) || text.trim();
+  return line.replace(/^#+\s*/, '').slice(0, 200);
+}
+
+function parsePrdNote(args) {
+  const value = parseValue(args, '--from-note');
+  if (!value) {
+    return { note: '', idea: '' };
+  }
+  const notePath = resolve(process.cwd(), value);
+  if (!existsSync(notePath)) {
+    throw new Error(`Note file not found: ${notePath}`);
+  }
+  const note = readFileSync(notePath, 'utf8').trim();
+  if (!note) {
+    throw new Error(`Note file is empty: ${notePath}`);
+  }
+  return { note, idea: firstLine(note) };
+}
+
 async function runPrdInterview(args) {
   const target = resolve(parseTarget(args));
   const type = parsePrdType(args);
-  const questions = questionsForType(type);
+  const { note, idea: notedIdea } = parsePrdNote(args);
   let lang = parsePrdLang(args) || 'en';
+
+  // When the idea comes from a note file, skip the idea question and pre-fill it.
+  const allQuestions = questionsForType(type);
+  const questions = notedIdea ? allQuestions.filter((question) => question.key !== 'idea') : allQuestions;
+  const ideaLabel = lang === 'zh' ? '想法（来自笔记）' : 'Idea (from note)';
 
   if (!process.stdin.isTTY) {
     const lines = readFileSync(0, 'utf8').split(/\r?\n/);
-    const answers = {};
+    const answers = notedIdea ? { idea: notedIdea } : {};
     const [introTitle, introHint] = prdIntro(lang);
     console.log(introTitle);
     console.log(`${introHint}\n`);
+    if (notedIdea) {
+      console.log(`${ideaLabel}: ${notedIdea}\n`);
+    }
     questions.forEach((question, index) => {
       console.log(`${questionText(question, index, lang)}\n> ${lines[index] ?? ''}`);
       answers[question.key] = (lines[index] ?? '').trim();
     });
-    const { sessionPath } = writePrdAssets(target, answers);
+    const { sessionPath } = writePrdAssets(target, answers, note);
     return prdCompletionMessage(target, sessionPath, lang);
   }
 
@@ -861,6 +894,9 @@ async function runPrdInterview(args) {
     const [introTitle, introHint] = prdIntro(lang);
     console.log(introTitle);
     console.log(`${introHint}\n`);
+    if (notedIdea) {
+      console.log(`${ideaLabel}: ${notedIdea}\n`);
+    }
     for (const [index, question] of questions.entries()) {
       const answer = await rl.question(`${questionText(question, index, lang)}\n> `);
       answers[question.key] = answer.trim();
@@ -869,7 +905,10 @@ async function runPrdInterview(args) {
     rl.close();
   }
 
-  const { sessionPath } = writePrdAssets(target, answers);
+  if (notedIdea) {
+    answers.idea = notedIdea;
+  }
+  const { sessionPath } = writePrdAssets(target, answers, note);
   return prdCompletionMessage(target, sessionPath, lang);
 }
 

@@ -24,6 +24,12 @@ Example:
 
 - Add `examples/quick-date/`: a full end-to-end run (idea → PRD → docs → handoffs → quality report → retrospective).
 
+Lower the friction of first use:
+
+- Add `ai-pm-dev prd --from-note <file>`: seed the idea from an existing note or chat log (first line becomes the idea, the full note is saved as `source-note.md`) instead of retyping it.
+- `init` now prints concrete next steps (`prd`, `doctor`) and how downstream tools pick up the project.
+- Add a `LICENSE` file (MIT) and an `engines` field (Node >= 18).
+
 Lower the cost of keeping docs current (so they drift less):
 
 - Add one-line append commands: `ai-pm-dev decide "<decision>" [--why ...]`, `ai-pm-dev note "<progress>"`, `ai-pm-dev pitfall "<symptom>" [--cause ...] [--fix ...]`. They append to `docs/decision-log.md`, `docs/progress.md`, and `docs/troubleshooting.md` and strip the placeholder rows on first real entry.

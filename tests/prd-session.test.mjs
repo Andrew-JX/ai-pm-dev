@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -156,6 +156,27 @@ try {
 
     const checkOutput = runCli(['prd', 'check', '--target', target]);
     assert.match(checkOutput, /WARN AI boundary declared/);
+  }
+
+  {
+    // --from-note pre-fills the idea from a file and saves the raw note.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-note-'));
+    tempRoots.push(target);
+    const notePath = join(target, 'idea.md');
+    writeFileSync(notePath, '# Floating prompt assistant\n\nA desktop helper that turns selected text into a refined prompt.\n', 'utf8');
+
+    const remaining = ['Knowledge workers', 'Rewriting prompts by hand is slow'].join('\n');
+    const output = runCli(['prd', '--target', target, '--from-note', notePath], { input: `${remaining}\n` });
+    assert.match(output, /Idea \(from note\): Floating prompt assistant/);
+
+    const session = readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8');
+    assert.match(session, /floating-prompt-assistant/);
+
+    const sessionDir = JSON.parse(session).prdSessionPath;
+    assert.equal(existsSync(join(sessionDir, 'source-note.md')), true);
+    const answers = JSON.parse(readFileSync(join(sessionDir, 'answers.json'), 'utf8'));
+    assert.equal(answers.idea, 'Floating prompt assistant');
+    assert.equal(answers.targetUsers, 'Knowledge workers');
   }
 } finally {
   for (const root of tempRoots) {
