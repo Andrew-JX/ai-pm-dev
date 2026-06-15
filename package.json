@@ -4,6 +4,9 @@
   "description": "Local CLI agent for installing AI product development workflows and routing tasks.",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
     "bin",
     "scripts",

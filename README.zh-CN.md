@@ -2,9 +2,28 @@
 
 [English README](README.md)
 
-AI PM Dev Agent 是一个本地 CLI workflow agent，用来辅助 AI 产品开发。它把一个粗糙的产品想法，经过交互式 PM 访谈，沉淀为结构化 AI-PRD、原型 brief，以及面向 Codex、v0、Figma、Claude Code 等下游 AI 工具的 handoff prompt。
+把一个粗糙的产品想法，变成一份结构化 PRD，**以及一个下游 AI 编码工具（Claude Code、Codex、v0、
+Figma）一打开就知道怎么干活的项目** —— 你不需要手写一长段 prompt。
 
-它不是单次 prompt 生成器。v1.0 的核心是：先追问、澄清、收敛，再保存对话和结构化答案，最后生成可复用的产品开发资产。
+`ai-pm-dev` 是一个本地 CLI，做两件事：
+
+1. **访谈你的想法**，生成 AI-PRD、原型 brief，以及面向各工具的 handoff。
+2. **安装一套项目操作层** —— 一个 `AGENTS.md` 入口文件，加上一组 `docs/`（项目简介、UI 规格、
+   验收标准、决策日志、待确认问题……）。任何 AI 工具打开这个文件夹时都会读它，从而知道任务前/后的
+   协议、MVP 边界、以及该更新哪些文档。
+
+它**不会**调用 LLM API、运行 Dify、或自己执行多 Agent。它准备好上下文和质量门禁，让你已经在用的
+工具产出更稳定、更高质量的结果。
+
+## 看它实际跑一遍
+
+[`examples/quick-date/`](examples/quick-date/) 是用一个真实想法跑出来的完整案例：
+想法 → 访谈 → AI-PRD → 项目文档 → Codex/v0 handoff → 质量报告 →
+一份[复盘](examples/quick-date/retrospective.md)，说明这套流程帮你避免了什么。
+
+## 环境要求
+
+- Node.js 18 或更高版本（`node -v`）
 
 ## 安装
 
@@ -12,49 +31,30 @@ AI PM Dev Agent 是一个本地 CLI workflow agent，用来辅助 AI 产品开�
 npm install -g github:Andrew-JX/ai-pm-dev
 ```
 
-发布到 npm 后：
+不全局安装、直接试用：
 
 ```bash
-npm install -g ai-pm-dev
+npx github:Andrew-JX/ai-pm-dev --help
 ```
 
-## 推荐使用流程
-
-进入任意产品项目目录，并初始化一次工作流：
+## 快速上手（60 秒）
 
 ```bash
-cd <your-product-project>
-ai-pm-dev init .
-ai-pm-dev doctor
+mkdir my-product && cd my-product
+ai-pm-dev init .          # 把操作层安装进当前文件夹
+ai-pm-dev prd --lang zh   # 进行 PM 访谈（中文）
+ai-pm-dev prd check       # 给 PRD 打分，生成 quality-report.md
+ai-pm-dev doctor          # 确认一切就绪
 ```
 
-启动交互式 PRD 访谈：
+## 然后交给编码工具 —— 两种方式
 
-```bash
-ai-pm-dev prd
-```
+**A. 直接打开文件夹（推荐）。** 在 Claude Code 或 Codex 里打开 `my-product`，它们会自动读取
+`AGENTS.md`，从而被指向 `docs/PROJECT_BRIEF.md` 等文档。你只需要说：
 
-CLI 会依次追问用户、痛点、核心流程、MVP 范围、数据模型、确定性规则、AI 边界、可信机制、风险和验收标准。
+> 请按当前项目的 AI PM Dev workflow 继续。
 
-完成后会生成：
-
-```text
-.ai-pm-dev/prd-sessions/<timestamp-slug>/
-  conversation.md
-  answers.json
-  ai-prd.md
-  prototype-brief.md
-  handoff-codex.md
-  handoff-v0.md
-  handoff-figma.md
-  risks.md
-  acceptance-tests.md
-memory/current-ai-prd.md
-memory/current-task-prompt.md
-.ai-pm-dev/state.json
-```
-
-把结果交给下游工具：
+**B. 粘贴 handoff prompt。** 如果你的工具不会自动读取项目文件，就复制一份工具专用 prompt：
 
 ```bash
 ai-pm-dev prd handoff --to codex
@@ -62,58 +62,68 @@ ai-pm-dev prd handoff --to v0
 ai-pm-dev prd handoff --to figma
 ```
 
+## `init` 会安装什么
+
+```text
+my-product/
+  AGENTS.md          # 入口文件：任务前/后协议、文档清单、路由
+  CLAUDE.md          # 指向 AGENTS.md 的轻量指针
+  docs/
+    PROJECT_BRIEF.md  UI_SPEC.md  acceptance-tests.md
+    decision-log.md   open-questions.md  progress.md  troubleshooting.md
+  skills/            # 9 个角色技能（spec、design、plan、build、bug-fix、review、release、prd）
+  templates/         # 可复用的产物模板
+  memory/            # 反馈日志、规则候选、技能改进日志
+```
+
+随后 `prd` 会填充 `PROJECT_BRIEF.md`、`UI_SPEC.md`、`acceptance-tests.md`，向
+`decision-log.md` 追加记录，并把空答案记入 `open-questions.md`。你已经手动编辑过的文件会被保留
+——只有未填写的占位文档会被写入。如果 `CLAUDE.md`/`AGENTS.md` 已存在，会备份为
+`*.ai-pm-dev-backup.md`。
+
+## PRD 选项
+
+```bash
+ai-pm-dev prd --lang zh                 # 中文访谈（默认 en，未指定时会询问）
+ai-pm-dev prd --type consumer           # 无 AI 的产品，跳过 AI 专属问题
+ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
+```
+
+`prd check` 输出 `PASS/WARN/FAIL`。对于不含 AI 的产品，AI 相关缺口是 **WARN（提示“标记为不适用”）**，
+而不是 FAIL。
+
 ## 命令
 
 ```bash
-ai-pm-dev init <target-project>
-ai-pm-dev prd [--target <target-project>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
-ai-pm-dev prd status [--target <target-project>]
-ai-pm-dev prd check [--target <target-project>]
-ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target-project>]
-ai-pm-dev start "<task>" --target <target-project> --save
-ai-pm-dev status --target <target-project>
-ai-pm-dev doctor --target <target-project>
-ai-pm-dev config set target <target-project>
-ai-pm-dev config get
-ai-pm-dev config clear
+ai-pm-dev init <target>
+ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd status [--target <target>]
+ai-pm-dev prd check [--target <target>]
+ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]
+ai-pm-dev start "<task>" --type <type> --target <target> --save
+ai-pm-dev status  [--target <target>]
+ai-pm-dev doctor  [--target <target>]
+ai-pm-dev config  set target <target> | get | clear
 ai-pm-dev onboarding
 ai-pm-dev release-check
 ```
 
-## 传统 AI Coding 任务路由
+## 路由一个开发任务（不走完整 PRD）
 
-`start` 仍然用于把开发任务路由到对应 Skill，并生成 task prompt：
+`start` 把实现任务路由到对应 Skill 并生成 prompt：
 
 ```bash
 ai-pm-dev start "提交页面返回 500" --type bug --save
-ai-pm-dev start "准备发布这个版本" --type release --save
 ```
 
-支持的 `start --type`：
+支持的 `--type`：`spec`、`brief`、`design`、`plan`、`build`、`bug`、`review`、`release`。
 
-```text
-spec
-brief
-design
-plan
-build
-bug
-review
-release
-```
+## Windows / PowerShell
 
-## init 会安装什么
-
-```text
-your-project/
-  CLAUDE.md
-  skills/
-  templates/
-  memory/
-```
-
-如果目标项目已有 `CLAUDE.md`，会备份为 `CLAUDE.ai-pm-dev-backup.md`。已有 memory 文件会保留。
+CLI 文件都是 UTF-8。如果终端里中文显示为乱码，把控制台切到 UTF-8（`chcp 65001`，或
+`$OutputEncoding = [Text.Encoding]::UTF8`）。文件本身没有问题——只是控制台的显示设置。
 
 ## 当前边界
 
-v1.0 是本地 workflow kernel。它不直接调用 LLM API，不自动控制 Axure，不运行 Dify，也不自己执行多 Agent。它负责生成结构化产品资产和下游 handoff prompt，让 Codex、v0、Figma 等工具拿到更清晰、可追踪、可验证的上下文。
+本地 workflow kernel：不调用 LLM API，不自动控制 Axure/Dify，不自己运行多 Agent。它产出结构化产品
+资产、项目操作层和质量门禁，让下游 AI 工具拿到更清晰的上下文。

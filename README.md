@@ -1,10 +1,32 @@
 # AI PM Dev Agent
 
-[Chinese README](README.zh-CN.md)
+[中文 README](README.zh-CN.md)
 
-AI PM Dev Agent is a local CLI workflow agent for AI-assisted product development. It helps turn a rough product idea into a structured AI-PRD, prototype brief, and downstream prompts for Codex, v0, Figma, Claude Code, or similar AI tools.
+Turn a rough product idea into a structured PRD **and a project that downstream AI coding
+tools (Claude Code, Codex, v0, Figma) already know how to work in** — without writing a
+prompt by hand.
 
-It is not just a one-shot prompt generator. v1.0 adds an interactive PM interview workflow that asks the missing product questions first, saves the conversation, and turns the answers into reusable project assets.
+`ai-pm-dev` is a local CLI. It does two things:
+
+1. **Interviews you** about a product idea and generates an AI-PRD, prototype brief, and
+   tool-specific handoffs.
+2. **Installs a project operating layer** — an `AGENTS.md` entry file plus a `docs/` set
+   (project brief, UI spec, acceptance tests, decision log, open questions, …) that any AI
+   tool reads when it opens the folder, so it knows the before/after-task protocol, the MVP
+   boundary, and which docs to update.
+
+It does **not** call an LLM API, run Dify, or execute agents itself. It prepares the context
+and quality gates that make the tools you already use produce better, more consistent work.
+
+## See it work
+
+[`examples/quick-date/`](examples/quick-date/) is a full end-to-end run on one real idea:
+idea → interview → AI-PRD → project docs → Codex/v0 handoffs → quality report → a
+[retrospective](examples/quick-date/retrospective.md) of what the workflow caught.
+
+## Requirements
+
+- Node.js 18 or newer (`node -v`)
 
 ## Install
 
@@ -12,49 +34,32 @@ It is not just a one-shot prompt generator. v1.0 adds an interactive PM intervie
 npm install -g github:Andrew-JX/ai-pm-dev
 ```
 
-After npm publishing:
+Try it without installing globally:
 
 ```bash
-npm install -g ai-pm-dev
+npx github:Andrew-JX/ai-pm-dev --help
 ```
 
-## Recommended Workflow
-
-Open any product project and initialize the workflow once:
+## Quickstart (60 seconds)
 
 ```bash
-cd <your-product-project>
-ai-pm-dev init .
-ai-pm-dev doctor
+mkdir my-product && cd my-product
+ai-pm-dev init .          # install the operating layer into this folder
+ai-pm-dev prd             # answer the PM interview (use --lang zh for Chinese)
+ai-pm-dev prd check       # score the PRD; writes quality-report.md
+ai-pm-dev doctor          # confirm everything is in place
 ```
 
-Run an interactive PRD session:
+## Then hand it to a coding tool — two ways
 
-```bash
-ai-pm-dev prd
-```
+**A. Open the folder (recommended).** Open `my-product` in Claude Code or Codex. They read
+`AGENTS.md` automatically, which points them to `docs/PROJECT_BRIEF.md` and the rest. You can
+just say:
 
-The CLI asks structured PM interview questions about users, pain, workflow, MVP scope, data, deterministic rules, AI boundaries, trust, risks, and acceptance criteria.
+> Continue with this project's AI PM Dev workflow.
 
-It then writes:
-
-```text
-.ai-pm-dev/prd-sessions/<timestamp-slug>/
-  conversation.md
-  answers.json
-  ai-prd.md
-  prototype-brief.md
-  handoff-codex.md
-  handoff-v0.md
-  handoff-figma.md
-  risks.md
-  acceptance-tests.md
-memory/current-ai-prd.md
-memory/current-task-prompt.md
-.ai-pm-dev/state.json
-```
-
-Send a handoff prompt to a downstream tool:
+**B. Paste a handoff prompt.** If your tool does not auto-read project files, copy a
+tool-specific prompt:
 
 ```bash
 ai-pm-dev prd handoff --to codex
@@ -62,58 +67,70 @@ ai-pm-dev prd handoff --to v0
 ai-pm-dev prd handoff --to figma
 ```
 
+## What `init` installs
+
+```text
+my-product/
+  AGENTS.md          # entry file: before/after-task protocol, docs manifest, routing
+  CLAUDE.md          # thin pointer to AGENTS.md
+  docs/
+    PROJECT_BRIEF.md  UI_SPEC.md  acceptance-tests.md
+    decision-log.md   open-questions.md  progress.md  troubleshooting.md
+  skills/            # 9 role skills (spec, design, plan, build, bug-fix, review, release, prd)
+  templates/         # reusable artifact templates
+  memory/            # feedback log, rule candidates, skill-improvement log
+```
+
+`prd` then fills `PROJECT_BRIEF.md`, `UI_SPEC.md`, and `acceptance-tests.md`, appends to
+`decision-log.md`, and records any blank answers in `open-questions.md`. Existing files you
+have edited are preserved — only unfilled stubs are seeded. If `CLAUDE.md`/`AGENTS.md`
+already exist they are backed up as `*.ai-pm-dev-backup.md`.
+
+## PRD options
+
+```bash
+ai-pm-dev prd --lang zh                 # interview in Chinese (default: en, or asks)
+ai-pm-dev prd --type consumer           # skip AI-only questions for a non-AI product
+ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
+```
+
+`prd check` reports `PASS/WARN/FAIL`. For a product with no AI, AI-specific gaps are **WARN
+("mark not-applicable")**, not FAIL.
+
 ## Commands
 
 ```bash
-ai-pm-dev init <target-project>
-ai-pm-dev prd [--target <target-project>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
-ai-pm-dev prd status [--target <target-project>]
-ai-pm-dev prd check [--target <target-project>]
-ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target-project>]
-ai-pm-dev start "<task>" --target <target-project> --save
-ai-pm-dev status --target <target-project>
-ai-pm-dev doctor --target <target-project>
-ai-pm-dev config set target <target-project>
-ai-pm-dev config get
-ai-pm-dev config clear
+ai-pm-dev init <target>
+ai-pm-dev prd [--target <target>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd status [--target <target>]
+ai-pm-dev prd check [--target <target>]
+ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]
+ai-pm-dev start "<task>" --type <type> --target <target> --save
+ai-pm-dev status  [--target <target>]
+ai-pm-dev doctor  [--target <target>]
+ai-pm-dev config  set target <target> | get | clear
 ai-pm-dev onboarding
 ai-pm-dev release-check
 ```
 
-## Classic AI Coding Task Routing
+## Routing a coding task (without a full PRD)
 
-`start` still routes implementation work to a Skill and generates a task prompt:
+`start` routes an implementation task to a Skill and generates a prompt:
 
 ```bash
 ai-pm-dev start "The submit page returns 500" --type bug --save
-ai-pm-dev start "Prepare this release" --type release --save
 ```
 
-Supported `start --type` values:
+Supported `--type`: `spec`, `brief`, `design`, `plan`, `build`, `bug`, `review`, `release`.
 
-```text
-spec
-brief
-design
-plan
-build
-bug
-review
-release
-```
+## Windows / PowerShell
 
-## What init Installs
+The CLI files are UTF-8. If Chinese output looks garbled in the terminal, switch the console
+to UTF-8 (`chcp 65001`, or `$OutputEncoding = [Text.Encoding]::UTF8`). The files themselves
+are fine — it is only a console display setting.
 
-```text
-your-project/
-  CLAUDE.md
-  skills/
-  templates/
-  memory/
-```
+## Current boundary
 
-If `CLAUDE.md` already exists, it is backed up as `CLAUDE.ai-pm-dev-backup.md`. Existing memory files are preserved.
-
-## Current Boundary
-
-v1.0 is a local workflow kernel. It does not call an LLM API, automate Axure, run Dify, or execute multiple agents by itself. It creates structured PM assets and handoff prompts that make downstream AI tools work with clearer context and quality gates.
+A local workflow kernel: no LLM API calls, no Axure/Dify automation, no self-running
+multi-agent execution. It produces structured PM assets, a project operating layer, and
+quality gates so downstream AI tools work with clearer context.

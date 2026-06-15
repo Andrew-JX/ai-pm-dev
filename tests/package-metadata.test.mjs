@@ -14,12 +14,16 @@ assert.ok(pkg.files.includes('scripts'));
 assert.ok(pkg.files.includes('skills'));
 assert.ok(pkg.files.includes('templates'));
 assert.ok(pkg.files.includes('memory'));
+assert.ok(pkg.files.includes('operating-layer'));
 assert.ok(pkg.files.includes('CLAUDE.md'));
 assert.ok(pkg.files.includes('README.md'));
 assert.ok(pkg.files.includes('README.zh-CN.md'));
 assert.ok(pkg.files.includes('CHANGELOG.md'));
+assert.equal(pkg.engines.node, '>=18');
 
 assert.doesNotMatch(readme, /C:\\Users|Desktop\\my-product|15942/);
 assert.doesNotMatch(readmeZh, /C:\\Users|Desktop\\my-product|15942/);
-assert.match(readme, /cd <your-product-project>/);
-assert.match(readmeZh, /cd <your-product-project>/);
+assert.match(readme, /ai-pm-dev init \./);
+assert.match(readmeZh, /ai-pm-dev init \./);
+assert.match(readme, /AGENTS\.md/);
+assert.match(readmeZh, /AGENTS\.md/);
