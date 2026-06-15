@@ -69,6 +69,35 @@ try {
     assert.match(output, /Current Phase: Bug Fix/);
     assert.match(output, /Next Step:/);
   }
+
+  {
+    // Quick-append commands and the doctor stub nudge.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-append-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+
+    const before = runCli(['doctor', '--target', target]);
+    assert.match(before, /Docs still empty stubs:.*decision-log\.md/);
+
+    runCli(['decide', 'Use H5 not a mini-program', '--why', 'faster review', '--target', target]);
+    runCli(['pitfall', 'rAF freezes on hidden preview tab', '--fix', 'use visibilitychange', '--target', target]);
+    runCli(['note', 'finished custom input and location round-trip', '--target', target]);
+
+    const decisionLog = readFileSync(join(target, 'docs', 'decision-log.md'), 'utf8');
+    assert.match(decisionLog, /Use H5 not a mini-program \| faster review \| you/);
+    assert.doesNotMatch(decisionLog, /_\(to be filled\)_/);
+
+    const trouble = readFileSync(join(target, 'docs', 'troubleshooting.md'), 'utf8');
+    assert.match(trouble, /rAF freezes on hidden preview tab/);
+
+    const progress = readFileSync(join(target, 'docs', 'progress.md'), 'utf8');
+    assert.match(progress, /finished custom input and location round-trip/);
+
+    const after = runCli(['doctor', '--target', target]);
+    assert.doesNotMatch(after, /decision-log\.md/);
+    assert.doesNotMatch(after, /troubleshooting\.md/);
+    assert.doesNotMatch(after, /progress\.md/);
+  }
 } finally {
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true });

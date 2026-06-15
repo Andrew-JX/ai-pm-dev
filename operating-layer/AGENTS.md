@@ -25,6 +25,16 @@ in the `docs/` it points to.
 3. Update `docs/progress.md` (done / not-done / tests run).
 4. Report: what was completed, what was not, tests run, and residual risk.
 
+Fast path — these append one line each so updating is cheap (run from the project root):
+
+```bash
+ai-pm-dev decide "<decision>" --why "<reason>"
+ai-pm-dev note "<progress note>"
+ai-pm-dev pitfall "<symptom>" --cause "<cause>" --fix "<fix>"
+```
+
+Run `ai-pm-dev doctor` to see which docs are still empty stubs.
+
 ## Docs manifest
 
 `init` creates the core set as stubs. Heavier or stack-specific docs are declared here and

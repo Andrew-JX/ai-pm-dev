@@ -24,6 +24,12 @@ Example:
 
 - Add `examples/quick-date/`: a full end-to-end run (idea → PRD → docs → handoffs → quality report → retrospective).
 
+Lower the cost of keeping docs current (so they drift less):
+
+- Add one-line append commands: `ai-pm-dev decide "<decision>" [--why ...]`, `ai-pm-dev note "<progress>"`, `ai-pm-dev pitfall "<symptom>" [--cause ...] [--fix ...]`. They append to `docs/decision-log.md`, `docs/progress.md`, and `docs/troubleshooting.md` and strip the placeholder rows on first real entry.
+- `doctor` now lists core docs that are still empty stubs as a soft reminder to fill or remove them.
+- Fix: `ai-pm-dev init .` now installs into the user's working directory instead of the package directory.
+
 ## 1.0.0
 
 - Add interactive `prd` sessions for PM interview-driven AI-PRD generation.

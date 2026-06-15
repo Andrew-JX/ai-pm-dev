@@ -30,6 +30,9 @@ Usage:
   ai-pm-dev prd check [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
+  ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
+  ai-pm-dev note "<progress note>" [--target <path>]
+  ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]
   ai-pm-dev status [--target <path>]
   ai-pm-dev doctor [--target <path>]
   ai-pm-dev config get
@@ -42,6 +45,9 @@ Commands:
   init           Install workflow files into a target project.
   prd            Run an interactive PM interview and generate AI-PRD assets.
   start          Route a task, generate the AI prompt, and optionally save task state.
+  decide         Append a one-line decision to docs/decision-log.md.
+  note           Append a one-line progress note to docs/progress.md.
+  pitfall        Append a one-line pitfall to docs/troubleshooting.md.
   status         Show the saved task state for a target project.
   doctor         Check the package and optional target project setup.
   config         Store or inspect default CLI settings.
@@ -213,6 +219,14 @@ function runDoctor(args) {
   const operatingLayerOk = targetExists
     && existsSync(join(target, 'AGENTS.md'))
     && coreDocs.every((doc) => existsSync(join(target, 'docs', doc)));
+  const stubDocs = operatingLayerOk
+    ? coreDocs.filter((doc) => docIsStub(join(target, 'docs', doc)))
+    : [];
+  const docsNudge = operatingLayerOk
+    ? (stubDocs.length
+      ? `Docs still empty stubs: ${stubDocs.join(', ')}\n  Fill with: ai-pm-dev decide/note/pitfall, or ai-pm-dev prd`
+      : 'Docs filled: all core docs have content')
+    : '';
   const promptExists = targetExists && existsSync(join(target, 'memory', 'current-task-prompt.md'));
   const stateExists = targetExists && existsSync(join(target, '.ai-pm-dev', 'state.json'));
   const installedSkillCount = targetExists && existsSync(join(target, 'skills'))
@@ -228,7 +242,7 @@ Target: ${target}
 ${formatCheck('Package assets', packageAssetsOk, 'Reinstall with: npm install -g github:Andrew-JX/ai-pm-dev')}
 ${formatCheck('Target exists', targetExists, `Create the directory or check the path: ${target}`)}
 ${formatCheck('Target initialized', targetInitialized, `ai-pm-dev init "${target}"`)}
-${formatCheck('Operating layer (AGENTS.md + docs/)', operatingLayerOk, `ai-pm-dev init "${target}"`)}
+${formatCheck('Operating layer (AGENTS.md + docs/)', operatingLayerOk, `ai-pm-dev init "${target}"`)}${docsNudge ? `\n${docsNudge}` : ''}
 Installed skills: ${installedSkillCount}/${requiredSkills.length}
 ${formatCheck('Task prompt', promptExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}
 ${formatCheck('Task state', stateExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}
@@ -588,12 +602,81 @@ function seedDoc(path, content) {
   return true;
 }
 
+const PLACEHOLDER = /_\(to be filled\)_|_\(date\)_|_\(skill or person\)_|_\(how\)_/;
+
+// A doc still untouched: either an unfilled stub (Status: TODO) or only placeholder rows.
+function docIsStub(path) {
+  if (!existsSync(path)) {
+    return false;
+  }
+  const content = readFileSync(path, 'utf8');
+  return /\*\*Status:\*\* TODO/.test(content) || PLACEHOLDER.test(content);
+}
+
+function stripPlaceholderRows(content) {
+  return content
+    .split('\n')
+    .filter((line) => !PLACEHOLDER.test(line))
+    .join('\n');
+}
+
+// Escape a value for a markdown table cell (collapse whitespace, escape pipes).
+function cell(value) {
+  return (value || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
+}
+
 function appendRows(path, header, rows) {
   if (!rows.length) {
     return;
   }
-  const base = existsSync(path) ? readFileSync(path, 'utf8').trimEnd() : header.trimEnd();
+  const raw = existsSync(path) ? readFileSync(path, 'utf8') : header;
+  const base = stripPlaceholderRows(raw).trimEnd();
   writeFileSync(path, `${base}\n${rows.join('\n')}\n`, 'utf8');
+}
+
+const DECISION_HEADER = '# Decision Log\n\n| Date | Decision | Why | Owner |\n| --- | --- | --- | --- |\n';
+const TROUBLE_HEADER = '# Troubleshooting\n\n| Symptom | Root cause | Fix | Verified |\n| --- | --- | --- | --- |\n';
+
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function appendMessage(args, usage) {
+  const [message] = args;
+  if (!message || message.startsWith('-')) {
+    throw new Error(usage);
+  }
+  return message;
+}
+
+function runDecide(args) {
+  const message = appendMessage(args, 'Usage: ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const why = parseValue(args, '--why');
+  const path = join(target, 'docs', 'decision-log.md');
+  appendRows(path, DECISION_HEADER, [`| ${todayStamp()} | ${cell(message)} | ${cell(why) || '-'} | you |`]);
+  return `Logged decision -> ${path}\n`;
+}
+
+function runPitfall(args) {
+  const message = appendMessage(args, 'Usage: ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const cause = parseValue(args, '--cause');
+  const fix = parseValue(args, '--fix');
+  const path = join(target, 'docs', 'troubleshooting.md');
+  appendRows(path, TROUBLE_HEADER, [`| ${cell(message)} | ${cell(cause) || '-'} | ${cell(fix) || '-'} | - |`]);
+  return `Logged pitfall -> ${path}\n`;
+}
+
+function runNote(args) {
+  const message = appendMessage(args, 'Usage: ai-pm-dev note "<progress note>" [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const path = join(target, 'docs', 'progress.md');
+  const raw = existsSync(path) ? readFileSync(path, 'utf8') : '# Progress\n';
+  const base = stripPlaceholderRows(raw).trimEnd();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${base}\n- ${todayStamp()} — ${message.replace(/\s+/g, ' ').trim()}\n`, 'utf8');
+  return `Logged progress note -> ${path}\n`;
 }
 
 function writeProjectDocs(targetRoot, answers) {
@@ -985,6 +1068,12 @@ try {
     process.stdout.write(await runPrd(args));
   } else if (command === 'start') {
     process.stdout.write(runStart(args));
+  } else if (command === 'decide') {
+    process.stdout.write(runDecide(args));
+  } else if (command === 'note') {
+    process.stdout.write(runNote(args));
+  } else if (command === 'pitfall') {
+    process.stdout.write(runPitfall(args));
   } else if (command === 'status') {
     process.stdout.write(runStatus(args));
   } else if (command === 'doctor') {

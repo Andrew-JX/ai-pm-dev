@@ -92,6 +92,19 @@ ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
 `prd check` 输出 `PASS/WARN/FAIL`。对于不含 AI 的产品，AI 相关缺口是 **WARN（提示“标记为不适用”）**，
 而不是 FAIL。
 
+## 让文档保持更新（每条一行命令）
+
+更新文档不该意味着"打开文件写"。开发过程中随手记决策和坑，这些会直接追加进 `docs/`，
+`doctor` 也不再把它们当空模板：
+
+```bash
+ai-pm-dev decide "用 H5 不做小程序" --why "审核快、跨端、无需账号"
+ai-pm-dev pitfall "预览页隐藏标签导致 rAF 冻结" --fix "用 visibilitychange 兜底"
+ai-pm-dev note "完成自定义输入与地点回传闭环"
+```
+
+`ai-pm-dev doctor` 会列出仍是空模板的核心文档，让文档漂移可见。
+
 ## 命令
 
 ```bash
@@ -101,6 +114,9 @@ ai-pm-dev prd status [--target <target>]
 ai-pm-dev prd check [--target <target>]
 ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]
 ai-pm-dev start "<task>" --type <type> --target <target> --save
+ai-pm-dev decide "<decision>" [--why <reason>] [--target <target>]
+ai-pm-dev note "<progress note>" [--target <target>]
+ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <target>]
 ai-pm-dev status  [--target <target>]
 ai-pm-dev doctor  [--target <target>]
 ai-pm-dev config  set target <target> | get | clear

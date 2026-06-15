@@ -97,6 +97,19 @@ ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
 `prd check` reports `PASS/WARN/FAIL`. For a product with no AI, AI-specific gaps are **WARN
 ("mark not-applicable")**, not FAIL.
 
+## Keep docs current (one line each)
+
+Updating a doc should not mean opening a file. As you build, log decisions and pitfalls
+inline — these append to `docs/` and `doctor` stops flagging them as empty:
+
+```bash
+ai-pm-dev decide "Use H5 instead of a mini-program" --why "faster review, no account needed"
+ai-pm-dev pitfall "rAF freezes on a hidden preview tab" --fix "fall back to visibilitychange"
+ai-pm-dev note "finished the custom-input and location round-trip"
+```
+
+`ai-pm-dev doctor` lists any core docs that are still empty stubs, so drift is visible.
+
 ## Commands
 
 ```bash
@@ -106,6 +119,9 @@ ai-pm-dev prd status [--target <target>]
 ai-pm-dev prd check [--target <target>]
 ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target>]
 ai-pm-dev start "<task>" --type <type> --target <target> --save
+ai-pm-dev decide "<decision>" [--why <reason>] [--target <target>]
+ai-pm-dev note "<progress note>" [--target <target>]
+ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <target>]
 ai-pm-dev status  [--target <target>]
 ai-pm-dev doctor  [--target <target>]
 ai-pm-dev config  set target <target> | get | clear
