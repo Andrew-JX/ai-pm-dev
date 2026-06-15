@@ -59,3 +59,9 @@ description: Use when the user reports an error, exception, failing test, regres
 
 - bug 修复并验证完成。
 - 无法复现且缺少继续判断的关键证据。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）：
+
+- `troubleshooting.md` — 每次修复非显而易见的 bug 后追加：症状、根因、修复、验证。

@@ -60,3 +60,9 @@ description: Use when a product goal or specification exists and the user needs 
 
 - 用户确认可进入 Design Maker。
 - 关键设计约束缺失且无法合理假设。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）：
+
+- `UI_SPEC.md` — 写入设计约束、信息架构、交互原则、视觉方向。

@@ -61,3 +61,11 @@ description: Use when the user describes an idea, product, feature, requirement,
 
 - 用户确认规格可以进入设计或开发计划。
 - 仍有关键问题无法合理假设，需要用户回答。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）：
+
+- `PROJECT_BRIEF.md` — 产品定位、目标用户、痛点、MVP 与非目标。
+
+关键缺口写入 `open-questions.md`，不要用空泛文字填充。

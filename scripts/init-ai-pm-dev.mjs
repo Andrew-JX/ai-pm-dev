@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const copyRoots = ['skills', 'templates'];
 const memoryRoot = 'memory';
+const operatingLayerRoot = 'operating-layer';
 
 function printHelp() {
   console.log(`AI PM Dev Agent v0.2 initializer
@@ -115,9 +116,9 @@ function copyDirectory(sourceDir, targetDir, actions, options) {
   }
 }
 
-function installClaude(targetDir, actions, options) {
-  const source = join(repoRoot, 'CLAUDE.md');
-  const target = join(targetDir, 'CLAUDE.md');
+function installEntryFile(targetDir, actions, options, fileName, backupName) {
+  const source = join(repoRoot, operatingLayerRoot, fileName);
+  const target = join(targetDir, fileName);
 
   if (sameFileContent(source, target)) {
     actions.push(`keep existing ${target}`);
@@ -125,7 +126,7 @@ function installClaude(targetDir, actions, options) {
   }
 
   if (existsSync(target) && !options.force) {
-    const backup = uniqueBackupPath(targetDir, 'CLAUDE.ai-pm-dev-backup.md');
+    const backup = uniqueBackupPath(targetDir, backupName);
     actions.push(`backup ${target} -> ${backup}`);
     if (!options.dryRun) {
       copyFileSync(target, backup);
@@ -133,6 +134,29 @@ function installClaude(targetDir, actions, options) {
   }
 
   copyFileWithLog(source, target, actions, options);
+}
+
+function installClaude(targetDir, actions, options) {
+  installEntryFile(targetDir, actions, options, 'CLAUDE.md', 'CLAUDE.ai-pm-dev-backup.md');
+}
+
+function installAgents(targetDir, actions, options) {
+  installEntryFile(targetDir, actions, options, 'AGENTS.md', 'AGENTS.ai-pm-dev-backup.md');
+}
+
+function installDocs(targetDir, actions, options) {
+  const sourceDir = join(repoRoot, operatingLayerRoot, 'docs');
+  const targetDir2 = join(targetDir, 'docs');
+
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    copyFileWithLog(join(sourceDir, entry.name), join(targetDir2, entry.name), actions, {
+      ...options,
+      overwrite: false,
+    });
+  }
 }
 
 function installMemory(targetDir, actions, options) {
@@ -156,11 +180,13 @@ function initialize(options) {
 
   const actions = [];
   installClaude(targetDir, actions, options);
+  installAgents(targetDir, actions, options);
 
   for (const root of copyRoots) {
     copyDirectory(join(repoRoot, root), join(targetDir, root), actions, options);
   }
 
+  installDocs(targetDir, actions, options);
   installMemory(targetDir, actions, options);
 
   if (options.includeReadme) {
@@ -174,7 +200,7 @@ function initialize(options) {
   }
   console.log('');
   console.log('Next prompt:');
-  console.log('请先阅读 CLAUDE.md，并按其中的 AI PM Dev Agent 流程工作。');
+  console.log('请先阅读 AGENTS.md（项目操作层入口），并按其中的 AI PM Dev Agent 流程工作。');
   console.log('当前任务是：...');
 }
 

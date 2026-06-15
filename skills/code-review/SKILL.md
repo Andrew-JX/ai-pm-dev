@@ -60,3 +60,11 @@ description: Use when the user asks to review code, inspect quality, find risks,
 
 - 审查范围已覆盖并输出结果。
 - 缺少 diff 或文件范围，无法判断。
+
+## 维护文档 (Maintains)
+
+对照项目操作层文档审查（位于 `docs/`），而不是凭空判断：
+
+- `acceptance-tests.md` — 验证实现是否满足验收切片。
+- `architecture.md` — 检查是否违反既定结构与数据流。
+- `UI_SPEC.md` — 检查界面是否符合设计约束。

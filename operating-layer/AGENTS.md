@@ -1,0 +1,66 @@
+# AGENTS.md — Project Operating Layer
+
+> Project entry file for AI coding tools (Claude Code, Codex, v0, Figma).
+> Installed by `ai-pm-dev init`. Project specifics are filled by `ai-pm-dev prd`.
+
+**Project:** _(to be filled by `ai-pm-dev prd`)_
+**One-liner:** _(to be filled by `ai-pm-dev prd`)_
+
+This project uses the AI PM Dev operating layer. Any AI tool working here reads this file
+first, then follows the protocol below. Do not invent process — it lives in this file and
+in the `docs/` it points to.
+
+## Before any task
+
+1. Read `docs/PROJECT_BRIEF.md`, `docs/open-questions.md`, and `docs/acceptance-tests.md`.
+2. Read `memory/current-ai-prd.md` if it exists (the latest PRD).
+3. Restate your understanding of the task in one or two sentences.
+4. If a key gap would make the work incorrect, ask at most 5 clarifying questions before coding.
+5. Do not expand scope beyond the MVP until the user confirms. MVP and non-goals live in `docs/PROJECT_BRIEF.md`.
+
+## After any task
+
+1. Update `docs/decision-log.md` with meaningful decisions (what was included/excluded and why).
+2. Update `docs/open-questions.md` (resolve answered ones, add new gaps).
+3. Update `docs/progress.md` (done / not-done / tests run).
+4. Report: what was completed, what was not, tests run, and residual risk.
+
+## Docs manifest
+
+`init` creates the core set as stubs. Heavier or stack-specific docs are declared here and
+created on demand by the owning skill when its phase begins. To prune: delete the file and
+remove its row.
+
+| Doc | Purpose | Owner skill | Status |
+| --- | --- | --- | --- |
+| `docs/PROJECT_BRIEF.md` | Product one-liner, users, pain, MVP/non-goals | prd-generator | core stub |
+| `docs/UI_SPEC.md` | Screens, states, interaction, visual direction | design-brief-builder / design-maker | core stub |
+| `docs/acceptance-tests.md` | Verifiable acceptance scenarios | prd-generator / code-review | core stub |
+| `docs/decision-log.md` | Why the MVP includes/excludes things | all skills append | core stub |
+| `docs/open-questions.md` | Unconfirmed gaps, blank/not-applicable answers | all skills | core stub |
+| `docs/progress.md` | Done / not-done / tests run | dev-builder | core stub |
+| `docs/troubleshooting.md` | Debugging lessons, repeated pitfalls | bug-fixer | core stub |
+| `docs/architecture.md` | System structure and data flow | dev-planner | on demand |
+| `docs/api-contract.md` | API endpoints and contracts (if a backend exists) | dev-planner / dev-builder | on demand |
+| `docs/db-schema.md` | Persistence schema (if persistence exists) | dev-builder | on demand |
+| `docs/roadmap.md` | Phasing and sequencing | dev-planner / release-builder | on demand |
+| `docs/local-run-guide.md` | How to run the project locally | release-builder | on demand |
+| `docs/release-checklist.md` | Pre-release checks | release-builder | on demand |
+| `docs/demo-script.md` | Demo walkthrough | release-builder | on demand |
+
+## Routing to skills
+
+Pick the earliest missing step. Skill files live in `skills/<name>/SKILL.md`.
+
+| Intent | Skill |
+| --- | --- |
+| Idea, feature, requirement, vague goal | `product-spec-builder` / `prd-generator` |
+| Needs UI/UX constraints or design requirements | `design-brief-builder` |
+| Needs a page, prototype, layout, component proposal | `design-maker` |
+| Wants to start dev but lacks confirmed steps | `dev-planner` |
+| Has a confirmed plan, wants implementation | `dev-builder` |
+| Reports an error, failing test, regression | `bug-fixer` |
+| Wants code review, risk/test-gap inspection | `code-review` |
+| Prepares build, delivery, release, handoff | `release-builder` |
+
+Order: `Spec -> Design Brief -> Design -> Dev Plan -> Build -> Bug Fix -> Review -> Release`.

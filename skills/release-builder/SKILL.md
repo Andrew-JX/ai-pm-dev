@@ -60,3 +60,11 @@ description: Use when the user is preparing a build, deployment, handoff, delive
 
 - 发布材料完成并给出 ready 状态。
 - 存在阻塞项，需要用户或外部系统处理。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）。这些为按需创建：
+
+- `local-run-guide.md` — 本地运行步骤。
+- `release-checklist.md` — 发布前检查项。
+- `demo-script.md` — 演示走查脚本。

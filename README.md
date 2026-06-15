@@ -1,37 +1,16 @@
 # AI PM Dev Agent
 
-[中文文档](README.zh-CN.md)
+[Chinese README](README.zh-CN.md)
 
-AI PM Dev Agent is a local CLI agent that installs AI product development workflows into any project and generates task prompts for Codex, Claude Code, or similar AI coding tools.
+AI PM Dev Agent is a local CLI workflow agent for AI-assisted product development. It helps turn a rough product idea into a structured AI-PRD, prototype brief, and downstream prompts for Codex, v0, Figma, Claude Code, or similar AI tools.
 
-It is not a web app or background service. It does these things:
-
-1. `init`: installs `CLAUDE.md`, `skills/`, `templates/`, and `memory/` into a target project.
-2. `start`: routes a task to the right Skill and generates a prompt for your AI coding tool.
-3. `status`: shows the current task phase, Skill, and next step.
-4. `doctor`: checks whether the package and target project are ready.
-5. `config`: stores a default target project path.
-6. `onboarding`: prints the shortest beginner path.
-7. `release-check`: prints the release readiness checklist.
+It is not just a one-shot prompt generator. v1.0 adds an interactive PM interview workflow that asks the missing product questions first, saves the conversation, and turns the answers into reusable project assets.
 
 ## Install
-
-### Option A: Install From GitHub
-
-Use this before the package is published to npm:
 
 ```bash
 npm install -g github:Andrew-JX/ai-pm-dev
 ```
-
-Then run from any directory:
-
-```bash
-ai-pm-dev --help
-ai-pm-dev doctor
-```
-
-### Option B: Install From npm
 
 After npm publishing:
 
@@ -39,46 +18,58 @@ After npm publishing:
 npm install -g ai-pm-dev
 ```
 
-Then:
+## Recommended Workflow
+
+Open any product project and initialize the workflow once:
 
 ```bash
-ai-pm-dev --help
+cd <your-product-project>
+ai-pm-dev init .
+ai-pm-dev doctor
 ```
 
-## Three-Step Usage
+Run an interactive PRD session:
 
-Assume your target project is:
+```bash
+ai-pm-dev prd
+```
+
+The CLI asks structured PM interview questions about users, pain, workflow, MVP scope, data, deterministic rules, AI boundaries, trust, risks, and acceptance criteria.
+
+It then writes:
 
 ```text
-C:\Users\15942\Desktop\11
+.ai-pm-dev/prd-sessions/<timestamp-slug>/
+  conversation.md
+  answers.json
+  ai-prd.md
+  prototype-brief.md
+  handoff-codex.md
+  handoff-v0.md
+  handoff-figma.md
+  risks.md
+  acceptance-tests.md
+memory/current-ai-prd.md
+memory/current-task-prompt.md
+.ai-pm-dev/state.json
 ```
 
-Step 1, initialize the target project:
+Send a handoff prompt to a downstream tool:
 
 ```bash
-ai-pm-dev init "C:\Users\15942\Desktop\11"
-ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+ai-pm-dev prd handoff --to codex
+ai-pm-dev prd handoff --to v0
+ai-pm-dev prd handoff --to figma
 ```
-
-Step 2, start a task:
-
-```bash
-ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --save
-```
-
-Step 3, open the target project and paste the generated prompt into Codex or Claude Code:
-
-```bash
-cd "C:\Users\15942\Desktop\11"
-```
-
-Copy the content of `memory/current-task-prompt.md`.
 
 ## Commands
 
 ```bash
 ai-pm-dev init <target-project>
+ai-pm-dev prd [--target <target-project>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd status [--target <target-project>]
+ai-pm-dev prd check [--target <target-project>]
+ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target-project>]
 ai-pm-dev start "<task>" --target <target-project> --save
 ai-pm-dev status --target <target-project>
 ai-pm-dev doctor --target <target-project>
@@ -89,22 +80,16 @@ ai-pm-dev onboarding
 ai-pm-dev release-check
 ```
 
-After setting a default target, `--target` can be omitted:
+## Classic AI Coding Task Routing
+
+`start` still routes implementation work to a Skill and generates a task prompt:
 
 ```bash
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
-ai-pm-dev start "Prepare this release" --save
-ai-pm-dev status
-ai-pm-dev doctor
+ai-pm-dev start "The submit page returns 500" --type bug --save
+ai-pm-dev start "Prepare this release" --type release --save
 ```
 
-Force a route:
-
-```bash
-ai-pm-dev start "The submit page returns 500" --type bug --target "C:\Users\15942\Desktop\11" --save
-```
-
-Supported types:
+Supported `start --type` values:
 
 ```text
 spec
@@ -127,78 +112,8 @@ your-project/
   memory/
 ```
 
-If `CLAUDE.md` already exists, it is backed up as:
-
-```text
-CLAUDE.ai-pm-dev-backup.md
-```
-
-Existing `memory/*.md` files are preserved.
-
-## What start Saves
-
-With `--save`, `start` writes:
-
-```text
-memory/current-task-prompt.md
-.ai-pm-dev/state.json
-```
-
-Paste `memory/current-task-prompt.md` into your AI coding tool.
-
-## What doctor Checks
-
-```bash
-ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
-```
-
-It checks package assets, target existence, target initialization, the 8 core Skills, generated task prompt, and task state. Failed checks include a fix command.
-
-## What config Stores
-
-```bash
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
-```
-
-This saves a default target project on your machine. After that, `start`, `status`, and `doctor` can run without `--target`.
-
-## What onboarding Shows
-
-```bash
-ai-pm-dev onboarding
-```
-
-It prints the shortest beginner path: initialize a project, start a task, open the prompt, and paste it into Codex or Claude Code.
-
-## What release-check Shows
-
-```bash
-ai-pm-dev release-check
-```
-
-It prints the release checklist: `npm test`, `npm pack --dry-run`, CLI help, doctor, README checks, and package metadata checks.
-It also reminds you to verify `CHANGELOG.md`.
-
-## Developer Usage
-
-Only use this form when developing this package itself:
-
-```bash
-cd E:\studyspace\ai-pm-dev
-node bin\ai-pm-dev.mjs --help
-node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
-```
-
-Do not run this from a target project:
-
-```bash
-node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
-```
-
-That only works if the current folder contains `bin/ai-pm-dev.mjs`.
+If `CLAUDE.md` already exists, it is backed up as `CLAUDE.ai-pm-dev-backup.md`. Existing memory files are preserved.
 
 ## Current Boundary
 
-v0.8 is a distributable local CLI agent with self-check, release-check, and default target config.
-
-It does not open Codex or Claude Code by itself, and it does not directly modify your application code. It installs workflow rules, routes tasks, generates prompts, and saves task state.
+v1.0 is a local workflow kernel. It does not call an LLM API, automate Axure, run Dify, or execute multiple agents by itself. It creates structured PM assets and handoff prompts that make downstream AI tools work with clearer context and quality gates.

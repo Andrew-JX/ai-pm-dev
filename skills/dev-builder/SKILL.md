@@ -60,3 +60,12 @@ description: Use when the user has confirmed an implementation plan or explicitl
 
 - 实现和验证完成。
 - 遇到阻塞且已经尝试合理排查。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）。后端相关文档按需创建：
+
+- `progress.md` — 每次实现后更新已完成、未完成、已测试。
+- `api-contract.md` — 存在后端时记录接口契约。
+- `db-schema.md` — 存在持久化时记录数据结构。
+- `decision-log.md` — 追加实现期关键决策及原因。

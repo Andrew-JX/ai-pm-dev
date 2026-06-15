@@ -31,9 +31,33 @@ try {
 
     assert.match(output, /AI PM Dev Agent v0\.2 initialized/);
     assert.ok(existsSync(join(target, 'CLAUDE.md')));
+    assert.ok(existsSync(join(target, 'AGENTS.md')));
+    assert.match(readFileSync(join(target, 'CLAUDE.md'), 'utf8'), /AGENTS\.md/);
+    assert.match(readFileSync(join(target, 'AGENTS.md'), 'utf8'), /Docs manifest/);
+    assert.ok(existsSync(join(target, 'docs', 'PROJECT_BRIEF.md')));
+    assert.ok(existsSync(join(target, 'docs', 'acceptance-tests.md')));
+    assert.ok(existsSync(join(target, 'docs', 'decision-log.md')));
+    assert.ok(existsSync(join(target, 'docs', 'open-questions.md')));
+    assert.ok(existsSync(join(target, 'docs', 'progress.md')));
+    assert.ok(existsSync(join(target, 'docs', 'troubleshooting.md')));
+    assert.ok(existsSync(join(target, 'docs', 'UI_SPEC.md')));
+    assert.ok(existsSync(join(target, 'skills', 'prd-generator', 'SKILL.md')));
     assert.ok(existsSync(join(target, 'skills', 'dev-planner', 'SKILL.md')));
+    assert.ok(existsSync(join(target, 'templates', 'ai-prd-template.md')));
     assert.ok(existsSync(join(target, 'templates', 'dev-plan-template.md')));
     assert.ok(existsSync(join(target, 'memory', 'feedback-log.md')));
+  }
+
+  {
+    // Existing user docs are preserved, not overwritten by stubs.
+    const target = makeTarget();
+    tempRoots.push(target);
+    runCli(['--target', target]);
+    writeFileSync(join(target, 'docs', 'progress.md'), 'real progress\n', 'utf8');
+
+    runCli(['--target', target]);
+
+    assert.equal(readFileSync(join(target, 'docs', 'progress.md'), 'utf8'), 'real progress\n');
   }
 
   {
@@ -66,6 +90,8 @@ try {
 
     assert.match(output, /Dry run/);
     assert.equal(existsSync(join(target, 'CLAUDE.md')), false);
+    assert.equal(existsSync(join(target, 'AGENTS.md')), false);
+    assert.equal(existsSync(join(target, 'docs', 'PROJECT_BRIEF.md')), false);
   }
 } finally {
   for (const root of tempRoots) {

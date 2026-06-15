@@ -59,3 +59,10 @@ description: Use when the user needs a page concept, prototype direction, visual
 
 - 用户确认可进入 Dev Planner。
 - 设计目标或平台约束缺失，继续设计会造成返工。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）：
+
+- `UI_SPEC.md` — 写入页面、布局、组件清单、状态与响应式规则。
+- `decision-log.md` — 追加关键 UI 决策及原因。

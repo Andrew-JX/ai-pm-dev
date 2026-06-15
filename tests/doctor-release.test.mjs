@@ -35,9 +35,10 @@ const tempRoots = [];
 try {
   {
     const output = runCli(['onboarding']);
-    assert.match(output, /1\. Initialize a project/);
+    assert.match(output, /1\. Open your product project/);
     assert.match(output, /ai-pm-dev init/);
-    assert.match(output, /memory\/current-task-prompt\.md/);
+    assert.match(output, /ai-pm-dev prd/);
+    assert.match(output, /prd handoff --to codex/);
   }
 
   {
@@ -45,6 +46,7 @@ try {
     tempRoots.push(target);
     const output = runCli(['doctor', '--target', target]);
     assert.match(output, /Target initialized: FAIL/);
+    assert.match(output, /Operating layer \(AGENTS\.md \+ docs\/\): FAIL/);
     assert.match(output, /Fix: ai-pm-dev init/);
   }
 
@@ -57,6 +59,7 @@ try {
 
     assert.match(output, /Package assets: PASS/);
     assert.match(output, /Target initialized: PASS/);
+    assert.match(output, /Operating layer \(AGENTS\.md \+ docs\/\): PASS/);
     assert.match(output, /Task prompt: PASS/);
     assert.match(output, /Task state: PASS/);
   }
@@ -70,8 +73,8 @@ try {
 
   {
     const output = runNpm(['pack', '--dry-run']);
-    assert.match(output, /ai-pm-dev-0\.8\.0\.tgz/);
-    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-0.8.0.tgz')), false);
+    assert.match(output, /ai-pm-dev-1\.0\.0\.tgz/);
+    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.0.0.tgz')), false);
   }
 } finally {
   for (const root of tempRoots) {

@@ -2,109 +2,94 @@
 
 [English README](README.md)
 
-AI PM Dev Agent 是一个本地 CLI Agent，用来把 AI 产品开发流程安装到任意项目里，并为 Codex / Claude Code 生成正确的任务 prompt。
+AI PM Dev Agent 是一个本地 CLI workflow agent，用来辅助 AI 产品开发。它把一个粗糙的产品想法，经过交互式 PM 访谈，沉淀为结构化 AI-PRD、原型 brief，以及面向 Codex、v0、Figma、Claude Code 等下游 AI 工具的 handoff prompt。
 
-它不是网页应用，也不是后台服务。它现在做这些事：
+它不是单次 prompt 生成器。v1.0 的核心是：先追问、澄清、收敛，再保存对话和结构化答案，最后生成可复用的产品开发资产。
 
-1. `init`：把 `CLAUDE.md`、`skills/`、`templates/`、`memory/` 安装到目标项目。
-2. `start`：根据你的任务自动选择 Skill，并生成可直接粘贴给 AI 编码工具的 prompt。
-3. `status`：查看当前任务阶段、Skill 和下一步。
-4. `doctor`：检查安装和目标项目是否准备好。
-5. `config`：保存默认目标项目路径，之后不用每次写 `--target`。
-6. `onboarding`：显示最短新手使用路径。
-7. `release-check`：显示发布前检查清单。
+## 安装
 
-## 给普通用户的安装方式
-
-### 方式 A：从 GitHub 安装
-
-适合还没发布到 npm 时使用：
-
-```powershell
+```bash
 npm install -g github:Andrew-JX/ai-pm-dev
 ```
 
-安装后，任何目录都可以直接运行：
+发布到 npm 后：
 
-```powershell
-ai-pm-dev --help
-ai-pm-dev doctor
-```
-
-### 方式 B：从 npm 安装
-
-发布到 npm 后使用：
-
-```powershell
+```bash
 npm install -g ai-pm-dev
 ```
 
-然后：
+## 推荐使用流程
 
-```powershell
-ai-pm-dev --help
+进入任意产品项目目录，并初始化一次工作流：
+
+```bash
+cd <your-product-project>
+ai-pm-dev init .
+ai-pm-dev doctor
 ```
 
-## 三步使用
+启动交互式 PRD 访谈：
 
-假设你的目标项目是：
+```bash
+ai-pm-dev prd
+```
+
+CLI 会依次追问用户、痛点、核心流程、MVP 范围、数据模型、确定性规则、AI 边界、可信机制、风险和验收标准。
+
+完成后会生成：
 
 ```text
-C:\Users\15942\Desktop\11
+.ai-pm-dev/prd-sessions/<timestamp-slug>/
+  conversation.md
+  answers.json
+  ai-prd.md
+  prototype-brief.md
+  handoff-codex.md
+  handoff-v0.md
+  handoff-figma.md
+  risks.md
+  acceptance-tests.md
+memory/current-ai-prd.md
+memory/current-task-prompt.md
+.ai-pm-dev/state.json
 ```
 
-第一步，初始化目标项目：
+把结果交给下游工具：
 
-```powershell
-ai-pm-dev init "C:\Users\15942\Desktop\11"
-ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
+```bash
+ai-pm-dev prd handoff --to codex
+ai-pm-dev prd handoff --to v0
+ai-pm-dev prd handoff --to figma
 ```
 
-第二步，开始一个任务：
+## 命令
 
-```powershell
-ai-pm-dev start "我想开始实现登录功能，请先给技术计划" --save
-```
-
-第三步，进入目标项目，把生成的 prompt 给 Codex / Claude Code：
-
-```powershell
-cd "C:\Users\15942\Desktop\11"
-```
-
-打开 `memory/current-task-prompt.md`，复制里面的内容，粘贴给 AI 编码工具。
-
-## 常用命令
-
-```powershell
-ai-pm-dev init <目标项目路径>
-ai-pm-dev start "<任务描述>" --target <目标项目路径> --save
-ai-pm-dev status --target <目标项目路径>
-ai-pm-dev doctor --target <目标项目路径>
-ai-pm-dev config set target <目标项目路径>
+```bash
+ai-pm-dev init <target-project>
+ai-pm-dev prd [--target <target-project>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>]
+ai-pm-dev prd status [--target <target-project>]
+ai-pm-dev prd check [--target <target-project>]
+ai-pm-dev prd handoff --to <codex|v0|figma> [--target <target-project>]
+ai-pm-dev start "<task>" --target <target-project> --save
+ai-pm-dev status --target <target-project>
+ai-pm-dev doctor --target <target-project>
+ai-pm-dev config set target <target-project>
 ai-pm-dev config get
 ai-pm-dev config clear
 ai-pm-dev onboarding
 ai-pm-dev release-check
 ```
 
-设置默认 target 后，可以省略 `--target`：
+## 传统 AI Coding 任务路由
 
-```powershell
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
-ai-pm-dev start "准备发布这个版本" --save
-ai-pm-dev status
-ai-pm-dev doctor
+`start` 仍然用于把开发任务路由到对应 Skill，并生成 task prompt：
+
+```bash
+ai-pm-dev start "提交页面返回 500" --type bug --save
+ai-pm-dev start "准备发布这个版本" --type release --save
 ```
 
-强制指定任务类型：
-
-```powershell
-ai-pm-dev start "页面提交后报 500" --type bug --target "C:\Users\15942\Desktop\11" --save
-```
-
-可用类型：
+支持的 `start --type`：
 
 ```text
 spec
@@ -117,9 +102,7 @@ review
 release
 ```
 
-## init 会做什么
-
-`init` 会把这些文件安装到目标项目：
+## init 会安装什么
 
 ```text
 your-project/
@@ -129,91 +112,8 @@ your-project/
   memory/
 ```
 
-如果目标项目已有 `CLAUDE.md`，会先备份成：
-
-```text
-CLAUDE.ai-pm-dev-backup.md
-```
-
-已有的 `memory/*.md` 不会被覆盖。
-
-## start 会做什么
-
-`start --save` 会生成：
-
-```text
-memory/current-task-prompt.md
-.ai-pm-dev/state.json
-```
-
-你把 `memory/current-task-prompt.md` 里的内容粘给 Codex / Claude Code。
-
-## status 会做什么
-
-```powershell
-ai-pm-dev status --target "C:\Users\15942\Desktop\11"
-```
-
-它会显示：
-
-- 当前任务
-- 当前阶段
-- 当前 Skill
-- Skill 文件路径
-- 下一步应该做什么
-
-## doctor 会做什么
-
-```powershell
-ai-pm-dev doctor --target "C:\Users\15942\Desktop\11"
-```
-
-它会检查当前包的核心文件、目标目录、目标项目初始化状态、8 个核心 Skill、任务 prompt 和任务状态文件。检查失败时会给出修复命令。
-
-## config 会做什么
-
-```powershell
-ai-pm-dev config set target "C:\Users\15942\Desktop\11"
-```
-
-它会把默认目标项目保存到本机配置里。之后 `start`、`status`、`doctor` 都可以不写 `--target`。
-
-## onboarding 会做什么
-
-```powershell
-ai-pm-dev onboarding
-```
-
-它会输出最短新手路径：初始化项目、开始任务、打开 prompt、交给 Codex / Claude Code。
-
-## release-check 会做什么
-
-```powershell
-ai-pm-dev release-check
-```
-
-它会输出发布前检查清单，包括 `npm test`、`npm pack --dry-run`、CLI help、doctor、README、CHANGELOG 和 package metadata 检查。
-
-## 给开发者的本地运行方式
-
-只有开发这个工具本身时才需要这样用：
-
-```powershell
-cd E:\studyspace\ai-pm-dev
-node bin\ai-pm-dev.mjs --help
-node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
-```
-
-不要在目标项目里运行：
-
-```powershell
-node bin\ai-pm-dev.mjs init "C:\Users\15942\Desktop\11"
-```
-
-除非目标项目本身也有 `bin\ai-pm-dev.mjs`。普通用户不应该用这种方式。
+如果目标项目已有 `CLAUDE.md`，会备份为 `CLAUDE.ai-pm-dev-backup.md`。已有 memory 文件会保留。
 
 ## 当前边界
 
-v0.8 是一个可分发、可自检、有发布检查清单、支持默认 target 配置的本地 CLI Agent。
-
-它还不会自己打开 Codex / Claude Code，也不会自动替你执行代码修改。它负责安装规则、路由任务、生成 prompt、保存任务状态。
+v1.0 是本地 workflow kernel。它不直接调用 LLM API，不自动控制 Axure，不运行 Dify，也不自己执行多 Agent。它负责生成结构化产品资产和下游 handoff prompt，让 Codex、v0、Figma 等工具拿到更清晰、可追踪、可验证的上下文。

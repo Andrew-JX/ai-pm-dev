@@ -66,3 +66,11 @@ description: Use when the user wants to start development but the technical appr
 
 - 用户确认计划并要求实现。
 - 技术或产品关键决策未确认。
+
+## 维护文档 (Maintains)
+
+负责维护项目操作层文档（位于 `docs/`）。这些为按需创建：
+
+- `architecture.md` — 系统结构与数据流。
+- `roadmap.md` — 阶段与排序。
+- `acceptance-tests.md` — 把验收标准拆成可验证切片。
