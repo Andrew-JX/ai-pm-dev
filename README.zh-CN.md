@@ -98,9 +98,9 @@ ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
 `doctor` 也不再把它们当空模板：
 
 ```bash
-ai-pm-dev decide "用 H5 不做小程序" --why "审核快、跨端、无需账号"
-ai-pm-dev pitfall "预览页隐藏标签导致 rAF 冻结" --fix "用 visibilitychange 兜底"
-ai-pm-dev note "完成自定义输入与地点回传闭环"
+ai-pm-dev decide "v1 先只做网页版" --why "最快做出可用 demo"
+ai-pm-dev pitfall "标签页隐藏时动画暂停" --fix "在 visibilitychange 时恢复"
+ai-pm-dev note "完成端到端主流程"
 ```
 
 `ai-pm-dev doctor` 会列出仍是空模板的核心文档，让文档漂移可见。

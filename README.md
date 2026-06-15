@@ -103,9 +103,9 @@ Updating a doc should not mean opening a file. As you build, log decisions and p
 inline — these append to `docs/` and `doctor` stops flagging them as empty:
 
 ```bash
-ai-pm-dev decide "Use H5 instead of a mini-program" --why "faster review, no account needed"
-ai-pm-dev pitfall "rAF freezes on a hidden preview tab" --fix "fall back to visibilitychange"
-ai-pm-dev note "finished the custom-input and location round-trip"
+ai-pm-dev decide "Ship web-only for v1" --why "fastest path to a usable demo"
+ai-pm-dev pitfall "Animation pauses when the tab is hidden" --fix "resume on visibilitychange"
+ai-pm-dev note "finished the end-to-end happy path"
 ```
 
 `ai-pm-dev doctor` lists any core docs that are still empty stubs, so drift is visible.

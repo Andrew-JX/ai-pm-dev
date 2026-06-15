@@ -79,19 +79,19 @@ try {
     const before = runCli(['doctor', '--target', target]);
     assert.match(before, /Docs still empty stubs:.*decision-log\.md/);
 
-    runCli(['decide', 'Use H5 not a mini-program', '--why', 'faster review', '--target', target]);
-    runCli(['pitfall', 'rAF freezes on hidden preview tab', '--fix', 'use visibilitychange', '--target', target]);
-    runCli(['note', 'finished custom input and location round-trip', '--target', target]);
+    runCli(['decide', 'Ship web-only for v1', '--why', 'fastest demo path', '--target', target]);
+    runCli(['pitfall', 'Animation pauses on a hidden tab', '--fix', 'resume on visibilitychange', '--target', target]);
+    runCli(['note', 'finished the end-to-end happy path', '--target', target]);
 
     const decisionLog = readFileSync(join(target, 'docs', 'decision-log.md'), 'utf8');
-    assert.match(decisionLog, /Use H5 not a mini-program \| faster review \| you/);
+    assert.match(decisionLog, /Ship web-only for v1 \| fastest demo path \| you/);
     assert.doesNotMatch(decisionLog, /_\(to be filled\)_/);
 
     const trouble = readFileSync(join(target, 'docs', 'troubleshooting.md'), 'utf8');
-    assert.match(trouble, /rAF freezes on hidden preview tab/);
+    assert.match(trouble, /Animation pauses on a hidden tab/);
 
     const progress = readFileSync(join(target, 'docs', 'progress.md'), 'utf8');
-    assert.match(progress, /finished custom input and location round-trip/);
+    assert.match(progress, /finished the end-to-end happy path/);
 
     const after = runCli(['doctor', '--target', target]);
     assert.doesNotMatch(after, /decision-log\.md/);
