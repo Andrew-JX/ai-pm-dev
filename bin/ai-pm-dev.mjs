@@ -52,8 +52,10 @@ Commands:
 
 function runNodeScript(scriptName, args) {
   const scriptPath = join(repoRoot, 'scripts', scriptName);
+  // Run in the user's working directory, not the package root, so a relative target
+  // like `.` resolves against where the user actually invoked the CLI.
   return execFileSync('node', [scriptPath, ...args], {
-    cwd: repoRoot,
+    cwd: process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -138,7 +140,9 @@ function runInit(args) {
   if (!target || target.startsWith('-')) {
     throw new Error('Usage: ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]');
   }
-  return runNodeScript('init-ai-pm-dev.mjs', ['--target', target, ...rest]);
+  // Resolve the target against the user's cwd up front so it never lands in the package dir.
+  const absoluteTarget = resolve(process.cwd(), target);
+  return runNodeScript('init-ai-pm-dev.mjs', ['--target', absoluteTarget, ...rest]);
 }
 
 function runStart(args) {

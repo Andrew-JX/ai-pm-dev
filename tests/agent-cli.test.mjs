@@ -30,6 +30,20 @@ try {
   }
 
   {
+    // Regression: `init .` must install into the user's cwd, not the package root.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-init-dot-'));
+    tempRoots.push(target);
+
+    const output = runCli(['init', '.'], target);
+
+    assert.match(output, new RegExp(target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(existsSync(join(target, 'AGENTS.md')), true);
+    assert.equal(existsSync(join(target, 'docs', 'PROJECT_BRIEF.md')), true);
+    // The package root must not have gained a backup from being overwritten.
+    assert.equal(existsSync(join(repoRoot, 'CLAUDE.ai-pm-dev-backup.md')), false);
+  }
+
+  {
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-agent-start-'));
     tempRoots.push(target);
 
