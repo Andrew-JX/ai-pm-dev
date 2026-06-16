@@ -25,12 +25,13 @@ Convert a vague idea into a structured AI-PRD, prototype brief, and downstream h
 
 1. Interview before writing. Do not generate a PRD from a one-line idea without identifying missing context.
 2. Force the cut before writing the PRD: make the user rank candidate features, cut must-haves to at most 3, pick the one thing that proves the idea, name at least one explicit non-goal, and commit to a single measurable metric. Push back on vague answers instead of accepting them.
-3. Separate deterministic rules from AI behavior.
-4. Define what AI may do, what it must not decide, and what evidence must be shown.
-5. Convert the answers into an AI-PRD using `templates/ai-prd-template.md`.
-6. Generate handoff prompts for implementation, prototype generation, and design work.
-7. Save the conversation and structured answers so the project can be resumed later.
-8. Verify with `ai-pm-dev prd check --strict` — it fails until the scope is actually cut.
+3. Stress-test before writing: surface the load-bearing assumptions ("what must be true for this to work?") and rank them by the cheapest test that would disprove each; run a pre-mortem ("imagine v1 already failed — why?") and turn the top one or two into risks or open questions.
+4. Separate deterministic rules from AI behavior.
+5. Define what AI may do, what it must not decide, and what evidence must be shown.
+6. Convert the answers into an AI-PRD using `templates/ai-prd-template.md`.
+7. Generate handoff prompts for implementation, prototype generation, and design work.
+8. Save the conversation and structured answers so the project can be resumed later.
+9. Verify with `ai-pm-dev prd check --strict` — it fails until the scope is actually cut.
 
 ## Prohibited Behavior
 

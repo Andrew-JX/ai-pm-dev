@@ -22,11 +22,12 @@ description: Use when the user asks to review code, inspect quality, find risks,
 1. 确认审查范围。
 2. 阅读相关 diff 和上下文文件。
 3. 对照项目本地规则、分层约束、接口契约、数据契约和 UI 规范。
-4. 优先找会导致错误、回归、数据问题、安全问题或维护风险的点。
-5. 检查测试、构建、lint、type-check、smoke 或手动验证是否覆盖关键路径。
-6. 检查是否遗漏必要的决策记录、踩坑记录或 release 说明。
-7. 按严重程度输出发现。
-8. 如无问题，明确说明未发现阻塞问题，并列出剩余风险。
+4. 做意图-实现对账：把代码实际行为和文档声称的行为对齐——`docs/acceptance-tests.md` 的每条验收是否真有代码兑现、`docs/scope.md` 的必做项是否都落地、是否偷偷做了 `docs/scope.md` 里写明不做的非目标。把每一处偏差作为一类 finding 列出（声称 X，实际 Y，在哪个文件）。
+5. 优先找会导致错误、回归、数据问题、安全问题或维护风险的点。
+6. 检查测试、构建、lint、type-check、smoke 或手动验证是否覆盖关键路径。
+7. 检查是否遗漏必要的决策记录、踩坑记录或 release 说明。
+8. 按严重程度输出发现。
+9. 如无问题，明确说明未发现阻塞问题，并列出剩余风险。
 
 ## 禁止事项
 
@@ -43,6 +44,9 @@ description: Use when the user asks to review code, inspect quality, find risks,
 
 ## Findings
 - [Severity] 文件:行 - 问题、影响、建议
+
+## Intent vs Implementation
+- 声称 X（docs/...），实际 Y（文件:行）——偏差与建议
 
 ## Open Questions
 ## Test Gaps
@@ -66,5 +70,6 @@ description: Use when the user asks to review code, inspect quality, find risks,
 对照项目操作层文档审查（位于 `docs/`），而不是凭空判断：
 
 - `acceptance-tests.md` — 验证实现是否满足验收切片。
+- `scope.md` — 检查必做项是否落地、是否偷偷做了非目标。
 - `architecture.md` — 检查是否违反既定结构与数据流。
 - `UI_SPEC.md` — 检查界面是否符合设计约束。

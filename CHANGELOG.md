@@ -8,6 +8,8 @@ Force the hard PM work (cut scope, set priorities) instead of only collecting an
 - Each PRD session and `docs/scope.md` records must-haves / the one thing / non-goals / the cut list / the metric.
 - `prd check` adds required forcing checks; `prd check --strict` exits non-zero when prioritization/cutting is missing, so it can gate a commit or CI run.
 - `AGENTS.md` adds a "PM challenge" protocol and the `product-spec-builder` / `prd-generator` skills now mandate it: before writing a spec/PRD/feature, the downstream AI must make the user rank, cut to 3, pick the one thing, name a non-goal, and commit to one metric — pushing back instead of being agreeable.
+- Sharpen the PM challenge with two techniques borrowed from established PM practice: assumption red-teaming (surface load-bearing assumptions, rank by cheapest disproving test) and a pre-mortem (imagine v1 failed — why?).
+- `code-review` skill now does an intent-vs-implementation reconciliation: check the code actually delivers `docs/acceptance-tests.md` and `docs/scope.md` must-haves and did not sneak in a non-goal; report each divergence (claims X, does Y, where) as its own finding.
 
 
 Operating layer:

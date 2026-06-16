@@ -64,6 +64,14 @@ a PRD, or building a new feature, interrogate the user until these are settled:
 6. **Defend the boundary.** If they try to re-add a cut item later, ask what they will drop to
    make room — scope is a fixed budget, not a growing list.
 
+Then stress-test the plan before writing it down:
+
+7. **Surface the load-bearing assumptions.** Ask "what must be true for this to work?" List
+   them, then rank by the *cheapest test that would disprove it* — push the user to validate
+   the most fragile, most load-bearing assumption first, not the most comfortable one.
+8. **Pre-mortem.** Ask "imagine v1 has already failed — what is the most likely reason?"
+   Turn the top one or two into a risk or an open question, not a vague worry.
+
 Do not write the PRD or the code until 1–5 are answered. Push back on vague answers; ask the
 sharp follow-up. Record the result with `ai-pm-dev prd` and verify with `ai-pm-dev prd check
 --strict` (it fails until the cutting is done). The goal is to force the decision, not to be
