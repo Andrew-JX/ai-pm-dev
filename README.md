@@ -114,6 +114,17 @@ ai-pm-dev note "finished the end-to-end happy path"
 
 `ai-pm-dev doctor` lists any core docs that are still empty stubs, so drift is visible.
 
+If you are building to learn, two more append into `docs/keywords.md` and
+`docs/learning-log.md` (created on demand, so they don't clutter a normal project):
+
+```bash
+ai-pm-dev keyword "AOP" --explain "insert logic around methods without touching business code"
+ai-pm-dev learned "login: controller validates -> service issues token -> client stores it"
+```
+
+The shipped `AGENTS.md` also tells downstream tools to explain the main request chain and to
+never delete your own comments/notes — so the goal is a feature you can actually explain.
+
 ## Commands
 
 ```bash

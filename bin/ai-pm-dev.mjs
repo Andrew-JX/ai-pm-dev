@@ -33,6 +33,8 @@ Usage:
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
   ai-pm-dev note "<progress note>" [--target <path>]
   ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]
+  ai-pm-dev keyword "<term>" --explain "<plain words>" [--example <e>] [--target <path>]
+  ai-pm-dev learned "<understanding in your own words>" [--target <path>]
   ai-pm-dev status [--target <path>]
   ai-pm-dev doctor [--target <path>]
   ai-pm-dev config get
@@ -48,6 +50,8 @@ Commands:
   decide         Append a one-line decision to docs/decision-log.md.
   note           Append a one-line progress note to docs/progress.md.
   pitfall        Append a one-line pitfall to docs/troubleshooting.md.
+  keyword        Append a key-term card to docs/keywords.md.
+  learned        Append an own-words understanding note to docs/learning-log.md.
   status         Show the saved task state for a target project.
   doctor         Check the package and optional target project setup.
   config         Store or inspect default CLI settings.
@@ -675,8 +679,43 @@ function runNote(args) {
   const raw = existsSync(path) ? readFileSync(path, 'utf8') : '# Progress\n';
   const base = stripPlaceholderRows(raw).trimEnd();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${base}\n- ${todayStamp()} — ${message.replace(/\s+/g, ' ').trim()}\n`, 'utf8');
+  writeFileSync(path, `${base}\n- ${todayStamp()} — ${clean(message)}\n`, 'utf8');
   return `Logged progress note -> ${path}\n`;
+}
+
+// Collapse whitespace without truncating (for free-text doc entries).
+function clean(value) {
+  return (value || '').replace(/\s+/g, ' ').trim();
+}
+
+function appendToDoc(path, header, block) {
+  const base = (existsSync(path) ? readFileSync(path, 'utf8') : header).trimEnd();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${base}\n${block}`, 'utf8');
+}
+
+function runKeyword(args) {
+  const term = appendMessage(args, 'Usage: ai-pm-dev keyword "<term>" --explain "<plain words>" [--example "<example>"] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const explain = parseValue(args, '--explain');
+  const example = parseValue(args, '--example');
+  const path = join(target, 'docs', 'keywords.md');
+  const header = '# Keywords\n\nYour own-words cards for key terms. Not the textbook definition — how you would explain it.\n';
+  let block = `\n### ${clean(term)}\n${clean(explain) || '(explain it in your own words)'}\n`;
+  if (example) {
+    block += `\nExample: ${clean(example)}\n`;
+  }
+  appendToDoc(path, header, block);
+  return `Logged keyword card -> ${path}\n`;
+}
+
+function runLearned(args) {
+  const text = appendMessage(args, 'Usage: ai-pm-dev learned "<what you understood, in your own words>" [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const path = join(target, 'docs', 'learning-log.md');
+  const header = '# Learning Log\n\nWhat you understood, in your own words. The bar is "can restate", not "looks familiar".\n';
+  appendToDoc(path, header, `- ${todayStamp()} — ${clean(text)}\n`);
+  return `Logged learning note -> ${path}\n`;
 }
 
 function writeProjectDocs(targetRoot, answers) {
@@ -1113,6 +1152,10 @@ try {
     process.stdout.write(runNote(args));
   } else if (command === 'pitfall') {
     process.stdout.write(runPitfall(args));
+  } else if (command === 'keyword') {
+    process.stdout.write(runKeyword(args));
+  } else if (command === 'learned') {
+    process.stdout.write(runLearned(args));
   } else if (command === 'status') {
     process.stdout.write(runStatus(args));
   } else if (command === 'doctor') {

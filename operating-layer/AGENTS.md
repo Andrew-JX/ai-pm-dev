@@ -31,9 +31,25 @@ Fast path — these append one line each so updating is cheap (run from the proj
 ai-pm-dev decide "<decision>" --why "<reason>"
 ai-pm-dev note "<progress note>"
 ai-pm-dev pitfall "<symptom>" --cause "<cause>" --fix "<fix>"
+ai-pm-dev keyword "<term>" --explain "<plain words>"   # a key-term card
+ai-pm-dev learned "<the main chain in your own words>"  # an understanding note
 ```
 
 Run `ai-pm-dev doctor` to see which docs are still empty stubs.
+
+## Collaboration style
+
+The goal is not only to ship the feature, but for the user to be able to explain it.
+
+- Plain language first, then the term: say what a step does and why before naming the pattern.
+- Bring the user along on verification: say exactly what to run, where to look, and what
+  result to expect — do not just declare it tested.
+- After a non-trivial change, explain the main chain end to end (request → entry point →
+  service/logic → data → what the user sees), then close-read the 3–6 key files.
+- Capability over speed: advancing the feature is not the only goal; the user being able to
+  restate the logic in their own words matters more.
+- Never delete the user's own comments, notes, or progress markers when editing — they are
+  thinking scaffolding, not noise.
 
 ## Docs manifest
 
@@ -57,6 +73,8 @@ remove its row.
 | `docs/local-run-guide.md` | How to run the project locally | release-builder | on demand |
 | `docs/release-checklist.md` | Pre-release checks | release-builder | on demand |
 | `docs/demo-script.md` | Demo walkthrough | release-builder | on demand |
+| `docs/keywords.md` | Own-words cards for key terms (`ai-pm-dev keyword`) | you | on demand |
+| `docs/learning-log.md` | Own-words understanding notes (`ai-pm-dev learned`) | you | on demand |
 
 ## Routing to skills
 

@@ -109,6 +109,17 @@ ai-pm-dev note "完成端到端主流程"
 
 `ai-pm-dev doctor` 会列出仍是空模板的核心文档，让文档漂移可见。
 
+如果你是「以做促学」，还有两条追加到 `docs/keywords.md` 和 `docs/learning-log.md`
+（按需创建，不会污染普通项目）：
+
+```bash
+ai-pm-dev keyword "AOP" --explain "不改业务代码，统一在方法前后插逻辑，比如日志、事务"
+ai-pm-dev learned "登录：Controller 校验 -> Service 签发 token -> 前端存下后续带上"
+```
+
+安装的 `AGENTS.md` 还会要求下游工具讲清主链、不删你自己的注释和笔记 ——
+目标是做出一个你真能讲清楚的功能。
+
 ## 命令
 
 ```bash

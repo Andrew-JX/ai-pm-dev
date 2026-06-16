@@ -93,6 +93,14 @@ try {
     const progress = readFileSync(join(target, 'docs', 'progress.md'), 'utf8');
     assert.match(progress, /finished the end-to-end happy path/);
 
+    runCli(['keyword', 'AOP', '--explain', 'insert logic around methods without touching business code', '--example', 'log request timing via an aspect', '--target', target]);
+    runCli(['learned', 'login request flows controller -> service -> token', '--target', target]);
+    const keywords = readFileSync(join(target, 'docs', 'keywords.md'), 'utf8');
+    assert.match(keywords, /### AOP/);
+    assert.match(keywords, /Example: log request timing via an aspect/);
+    const learning = readFileSync(join(target, 'docs', 'learning-log.md'), 'utf8');
+    assert.match(learning, /login request flows controller -> service -> token/);
+
     const after = runCli(['doctor', '--target', target]);
     assert.doesNotMatch(after, /decision-log\.md/);
     assert.doesNotMatch(after, /troubleshooting\.md/);

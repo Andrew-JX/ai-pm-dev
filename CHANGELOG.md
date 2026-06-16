@@ -30,6 +30,12 @@ Lower the friction of first use:
 - `init` now prints concrete next steps (`prd`, `doctor`) and how downstream tools pick up the project.
 - Add a `LICENSE` file (MIT) and an `engines` field (Node >= 18).
 
+Build-to-learn collaboration (so the project becomes capability, not just a finished feature):
+
+- Add `ai-pm-dev keyword "<term>" --explain ...` and `ai-pm-dev learned "<own words>"`, appending to on-demand `docs/keywords.md` and `docs/learning-log.md` (no bloat for normal projects).
+- `AGENTS.md` now carries a "Collaboration style" section: plain-language-first, bring-the-user-along verification, explain the main request chain, capability over speed, and never delete the user's own comments/notes.
+- `dev-builder` skill strengthened to explain the request→entry→service→data→UI chain, close-read the 3–6 key files, and preserve the user's notes/comments.
+
 Lower the cost of keeping docs current (so they drift less):
 
 - Add one-line append commands: `ai-pm-dev decide "<decision>" [--why ...]`, `ai-pm-dev note "<progress>"`, `ai-pm-dev pitfall "<symptom>" [--cause ...] [--fix ...]`. They append to `docs/decision-log.md`, `docs/progress.md`, and `docs/troubleshooting.md` and strip the placeholder rows on first real entry.
