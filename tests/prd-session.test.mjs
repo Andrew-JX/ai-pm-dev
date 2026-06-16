@@ -192,6 +192,23 @@ try {
   }
 
   {
+    // --quick asks only who/what/why and hands the rest to the LLM PM challenge.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-quick-'));
+    tempRoots.push(target);
+
+    const output = runCli(['prd', '--target', target, '--quick'], {
+      input: 'A small tool\nKnowledge workers\nManual work is slow\n',
+    });
+    assert.match(output, /3\. What is the sharpest user pain/);
+    assert.doesNotMatch(output, /\n4\. /);
+    assert.match(output, /Quick mode: this PRD is intentionally thin/);
+
+    const openQuestions = readFileSync(join(target, 'docs', 'open-questions.md'), 'utf8');
+    assert.match(openQuestions, /Non-goals:/);
+    assert.match(openQuestions, /The one thing:/);
+  }
+
+  {
     // --from-note pre-fills the idea from a file and saves the raw note.
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-note-'));
     tempRoots.push(target);

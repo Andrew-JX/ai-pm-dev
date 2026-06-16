@@ -25,7 +25,7 @@ function printHelp() {
 
 Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
-  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>]
+  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>] [--quick]
   ai-pm-dev prd status [--target <path>]
   ai-pm-dev prd check [--strict] [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
@@ -914,6 +914,19 @@ Next: ai-pm-dev prd check
 `;
 }
 
+function quickHandoffNote(lang) {
+  if (lang === 'zh') {
+    return `\n快速模式：这份 PRD 是故意精简的。在 Claude Code / Codex 里打开项目，
+让它执行 PM challenge（排序 → 砍到 3 个 → 那一个 → 非目标 → 单一指标），
+然后跑 ai-pm-dev prd check。
+`;
+  }
+  return `\nQuick mode: this PRD is intentionally thin. Open the project in Claude Code / Codex
+and let it run the PM challenge (rank -> cut to 3 -> the one thing -> a non-goal -> one metric),
+then run ai-pm-dev prd check.
+`;
+}
+
 function parsePrdLang(args) {
   const value = parseValue(args, '--lang');
   if (value && value !== 'zh' && value !== 'en') {
@@ -958,10 +971,16 @@ async function runPrdInterview(args) {
   const { note, idea: notedIdea } = parsePrdNote(args);
   let lang = parsePrdLang(args) || 'en';
 
+  // --quick captures only who/what/why and hands the real interrogation to the LLM.
+  const quick = args.includes('--quick');
+  const quickKeys = new Set(['idea', 'targetUsers', 'painPoints']);
+
   // When the idea comes from a note file, skip the idea question and pre-fill it.
-  const allQuestions = questionsForType(type);
-  const questions = notedIdea ? allQuestions.filter((question) => question.key !== 'idea') : allQuestions;
+  const typeQuestions = questionsForType(type);
+  const baseQuestions = quick ? typeQuestions.filter((question) => quickKeys.has(question.key)) : typeQuestions;
+  const questions = notedIdea ? baseQuestions.filter((question) => question.key !== 'idea') : baseQuestions;
   const ideaLabel = lang === 'zh' ? '想法（来自笔记）' : 'Idea (from note)';
+  const finish = (sessionPath) => prdCompletionMessage(target, sessionPath, lang) + (quick ? quickHandoffNote(lang) : '');
 
   if (!process.stdin.isTTY) {
     const lines = readFileSync(0, 'utf8').split(/\r?\n/);
@@ -977,7 +996,7 @@ async function runPrdInterview(args) {
       answers[question.key] = (lines[index] ?? '').trim();
     });
     const { sessionPath } = writePrdAssets(target, answers, note);
-    return prdCompletionMessage(target, sessionPath, lang);
+    return finish(sessionPath);
   }
 
   const rl = createInterface({
@@ -1013,7 +1032,7 @@ async function runPrdInterview(args) {
     answers.idea = notedIdea;
   }
   const { sessionPath } = writePrdAssets(target, answers, note);
-  return prdCompletionMessage(target, sessionPath, lang);
+  return finish(sessionPath);
 }
 
 function runPrdStatus(args) {

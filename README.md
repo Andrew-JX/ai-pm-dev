@@ -93,7 +93,12 @@ ai-pm-dev prd --lang zh                 # interview in Chinese (default: en, or 
 ai-pm-dev prd --type consumer           # skip AI-only questions for a non-AI product
 ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
 ai-pm-dev prd --from-note idea.md       # seed the idea from a note/chat log, skip retyping it
+ai-pm-dev prd --quick                   # capture only who/what/why; let your AI run the interrogation
 ```
+
+`--quick` asks just the idea, users, and pain, then hands off: open the project in your AI
+tool and it runs the PM challenge (rank → cut to 3 → the one thing → a non-goal → one metric).
+The unanswered items are recorded in `docs/open-questions.md`.
 
 With `--from-note`, the first line of the file becomes the idea, the rest is saved as
 `source-note.md` in the session, and the remaining questions are still asked.

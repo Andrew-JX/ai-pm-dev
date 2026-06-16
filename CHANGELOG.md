@@ -35,6 +35,7 @@ Example:
 Lower the friction of first use:
 
 - Add `ai-pm-dev prd --from-note <file>`: seed the idea from an existing note or chat log (first line becomes the idea, the full note is saved as `source-note.md`) instead of retyping it.
+- Add `ai-pm-dev prd --quick`: capture only idea/users/pain and hand the real interrogation to the downstream AI's PM-challenge protocol; unanswered items go to `docs/open-questions.md`.
 - `init` now prints concrete next steps (`prd`, `doctor`) and how downstream tools pick up the project.
 - Add a `LICENSE` file (MIT) and an `engines` field (Node >= 18).
 

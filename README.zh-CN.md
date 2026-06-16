@@ -88,7 +88,11 @@ ai-pm-dev prd --lang zh                 # 中文访谈（默认 en，未指定�
 ai-pm-dev prd --type consumer           # 无 AI 的产品，跳过 AI 专属问题
 ai-pm-dev prd --type ai-tool|saas|consumer|internal-tool
 ai-pm-dev prd --from-note idea.md       # 从已有的想法/聊天记录导入，不用重打一遍
+ai-pm-dev prd --quick                   # 只记 who/what/why，把追问交给你的 AI
 ```
+
+`--quick` 只问想法、用户、痛点，然后交接：在 AI 工具里打开项目，让它执行 PM challenge
+（排序 → 砍到 3 个 → 那一个 → 非目标 → 单一指标）。没答的项会记进 `docs/open-questions.md`。
 
 用 `--from-note` 时，文件第一行作为想法，其余内容存为 session 里的 `source-note.md`，
 其它问题照常会问。
