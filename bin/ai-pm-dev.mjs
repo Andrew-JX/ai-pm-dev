@@ -27,7 +27,7 @@ Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
   ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>]
   ai-pm-dev prd status [--target <path>]
-  ai-pm-dev prd check [--target <path>]
+  ai-pm-dev prd check [--strict] [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
@@ -336,9 +336,24 @@ const prdQuestions = [
   },
   {
     key: 'mvpScope',
-    label: 'MVP scope',
-    prompt: 'What must be in the MVP, and what is explicitly out of scope?',
-    promptZh: 'MVP 必须包含什么？明确不做什么？',
+    label: 'MVP must-haves',
+    prompt: 'List the v1 must-haves — at most 3. More than 3 means you have not prioritized.',
+    promptZh: '列出 v1 的必做项 —— 最多 3 个。超过 3 个就是还没定优先级。',
+    maxItems: 3,
+  },
+  {
+    key: 'oneThing',
+    label: 'The one thing',
+    prompt: 'If you could ship only ONE of those, which one proves the idea?',
+    promptZh: '如果只能上线其中一个，哪一个能验证这个想法？',
+    required: true,
+  },
+  {
+    key: 'nonGoals',
+    label: 'Non-goals',
+    prompt: 'Name at least one thing you are deliberately NOT doing in v1 (and why).',
+    promptZh: '至少说出一件 v1 故意不做的事（以及为什么）。',
+    required: true,
   },
   {
     key: 'dataModel',
@@ -375,11 +390,20 @@ const prdQuestions = [
   },
   {
     key: 'acceptanceCriteria',
-    label: 'Acceptance criteria',
-    prompt: 'How will you know the first version is successful?',
-    promptZh: '你怎么判断第一个版本是成功的？',
+    label: 'Primary success metric',
+    prompt: 'One measurable signal that v1 worked (a single number or observable result).',
+    promptZh: '一个可衡量的成功信号（单一数字或可观察的结果）。',
+    required: true,
   },
 ];
+
+// Count list items in a free-text answer (comma / Chinese comma / semicolon / newline separated).
+function countItems(value) {
+  return (value || '')
+    .split(/[,，;；\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean).length;
+}
 
 const projectTypes = ['ai-tool', 'saas', 'consumer', 'internal-tool', 'general'];
 
@@ -408,7 +432,9 @@ ${section('Target Users', answers.targetUsers)}
 ${section('Pain Points', answers.painPoints)}
 ${section('Current Workaround', answers.currentWorkaround)}
 ${section('Core User Workflow', answers.coreWorkflow)}
-${section('MVP Scope and Non-Goals', answers.mvpScope)}
+${section('MVP Must-Haves (max 3)', answers.mvpScope)}
+${section('The One Thing (ships first)', answers.oneThing)}
+${section('Non-Goals (explicitly not doing)', answers.nonGoals)}
 ${section('Data Model', answers.dataModel)}
 ${section('Deterministic Rules', answers.deterministicRules)}
 ${section('AI Usage Boundaries', answers.aiBoundaries)}
@@ -573,8 +599,43 @@ ${section('Target users', answers.targetUsers)}
 ${section('Pain / scenario', answers.painPoints)}
 ${section('Current workaround', answers.currentWorkaround)}
 ${section('Core workflow', answers.coreWorkflow)}
-${section('MVP scope', answers.mvpScope)}
+${section('MVP must-haves (max 3)', answers.mvpScope)}
+${section('The one thing (ships first)', answers.oneThing)}
+${section('Non-goals (explicitly not doing)', answers.nonGoals)}
 ${section('Data the product records or generates', answers.dataModel)}`;
+}
+
+function buildScopeDoc(answers) {
+  const items = (answers.mvpScope || '')
+    .split(/[,，;；\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const kept = items.slice(0, 3);
+  const cut = items.slice(3);
+  return `# Scope: ${answers.idea}
+
+Forced by \`ai-pm-dev prd\` to make prioritization explicit.
+
+## Must-haves (v1, max 3)
+
+${kept.length ? kept.map((item) => `- ${item}`).join('\n') : '- Not specified.'}
+
+## The one thing (proves the idea)
+
+${answers.oneThing.trim() || 'Not specified.'}
+
+## Explicitly not doing (v1)
+
+${answers.nonGoals.trim() || 'Not specified.'}
+
+## Cut / deferred to later
+
+${cut.length ? cut.map((item) => `- ${item}`).join('\n') : '- (nothing over the 3-item line)'}
+
+## Primary success metric
+
+${answers.acceptanceCriteria.trim() || 'Not specified.'}
+`;
 }
 
 function buildUiSpecDoc(answers) {
@@ -723,6 +784,9 @@ function writeProjectDocs(targetRoot, answers) {
   seedDoc(join(docsDir, 'PROJECT_BRIEF.md'), buildProjectBriefDoc(answers));
   seedDoc(join(docsDir, 'UI_SPEC.md'), buildUiSpecDoc(answers));
   seedDoc(join(docsDir, 'acceptance-tests.md'), buildAcceptanceDoc(answers));
+  // scope.md is regenerated from each PRD (newest prioritization wins).
+  mkdirSync(docsDir, { recursive: true });
+  writeFileSync(join(docsDir, 'scope.md'), buildScopeDoc(answers), 'utf8');
 
   const today = new Date().toISOString().slice(0, 10);
   appendRows(
@@ -785,6 +849,7 @@ function writePrdAssets(target, answers, sourceNote = '') {
     'handoff-figma.md': buildFigmaHandoff(answers),
     'risks.md': buildRisksDoc(answers),
     'acceptance-tests.md': buildAcceptanceTests(answers),
+    'scope.md': buildScopeDoc(answers),
   };
   if (sourceNote) {
     files['source-note.md'] = `# Source Note\n\nImported via \`ai-pm-dev prd --from-note\`.\n\n${sourceNote}\n`;
@@ -937,8 +1002,22 @@ async function runPrdInterview(args) {
       console.log(`${ideaLabel}: ${notedIdea}\n`);
     }
     for (const [index, question] of questions.entries()) {
-      const answer = await rl.question(`${questionText(question, index, lang)}\n> `);
-      answers[question.key] = answer.trim();
+      let answer = (await rl.question(`${questionText(question, index, lang)}\n> `)).trim();
+      // Force an answer for the prioritization questions — re-ask once.
+      if (question.required && !answer) {
+        const nudge = lang === 'zh'
+          ? '这一项必须回答，这正是最该想清楚的。再答一次：'
+          : 'This one is required — it is the point of the exercise. Answer again:';
+        answer = (await rl.question(`${nudge}\n> `)).trim();
+      }
+      // Force prioritization — cap the number of must-haves, re-ask once to cut.
+      if (question.maxItems && countItems(answer) > question.maxItems) {
+        const nudge = lang === 'zh'
+          ? `你列了 ${countItems(answer)} 个，最多 ${question.maxItems} 个。砍到 ${question.maxItems} 个：`
+          : `You listed ${countItems(answer)}; keep at most ${question.maxItems}. Cut to ${question.maxItems}:`;
+        answer = (await rl.question(`${nudge}\n> `)).trim();
+      }
+      answers[question.key] = answer;
     }
   } finally {
     rl.close();
@@ -998,8 +1077,16 @@ function evaluatePrd(answers, sessionPath) {
   required('Product idea present', has('idea'), 'A one-sentence product idea is mandatory.');
   required('Target users named', has('targetUsers'), 'State the first user group.');
   required('Pain point stated', has('painPoints'), 'Describe the sharpest user pain.');
-  required('MVP scope & non-goals', has('mvpScope'), 'State what is in the MVP and what is explicitly out.');
-  required('Acceptance criteria', has('acceptanceCriteria'), 'State how v1 success is judged.');
+  required('Must-haves present', has('mvpScope'), 'List the v1 must-haves.');
+  required('Primary metric present', has('acceptanceCriteria'), 'State one measurable success signal.');
+
+  // Forcing checks — the hard PM work: cutting and prioritizing.
+  required('Must-haves prioritized (<=3)', has('mvpScope') && countItems(text('mvpScope')) <= 3,
+    `Cut to at most 3 must-haves (you listed ${countItems(text('mvpScope'))}); defer the rest in scope.md.`);
+  required('Non-goals declared (something cut)', has('nonGoals'),
+    'Name at least one thing v1 is deliberately NOT doing.');
+  required('The one thing chosen', has('oneThing'),
+    'Pick the single feature that proves the idea if you could ship only one.');
 
   const acceptance = text('acceptanceCriteria');
   const verifiable = /\d|%|min|sec|within|less than|分钟|秒|百分|至少|次|完成/.test(acceptance);
@@ -1072,14 +1159,20 @@ function runPrdCheck(args) {
     return `${status.padEnd(4)} ${check.name}${check.pass ? '' : ` — ${check.hint}`}`;
   });
 
-  return `PRD Quality Check
+  // --strict turns a FAIL into a non-zero exit so it can gate a commit or CI run.
+  const strict = args.includes('--strict');
+  if (strict && score.overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  return `PRD Quality Check${strict ? ' (strict)' : ''}
 
 Session: ${sessionPath}
 Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
 
 ${lines.join('\n')}
 
-Report: ${reportPath}
+Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: exiting non-zero because required checks failed.' : ''}
 `;
 }
 

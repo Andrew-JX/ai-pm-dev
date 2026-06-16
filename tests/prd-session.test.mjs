@@ -35,7 +35,9 @@ try {
       'They cannot tell whether their training is improving',
       'They use scattered notes and screenshots',
       'Log workout, review progress, receive AI summary',
-      'MVP includes workout logging, progress trend, AI weekly summary; excludes social features',
+      'Workout logging, progress trend, weekly summary',
+      'Workout logging',
+      'No social features in v1',
       'Workout sets, reps, weight, RPE, session notes',
       'Volume, completion rate, and progress trend must be deterministic',
       'AI summarizes patterns and suggests next focus only',
@@ -74,7 +76,14 @@ try {
     const prd = readFileSync(join(sessionPath, 'ai-prd.md'), 'utf8');
     assert.match(prd, /# AI-PRD: AI fitness logging tool/);
     assert.match(prd, /## AI Usage Boundaries/);
+    assert.match(prd, /## Non-Goals \(explicitly not doing\)/);
     assert.match(prd, /Every AI summary must show the workouts and metrics it used/);
+
+    // Forcing artifacts: scope.md in the session and in docs/.
+    assert.equal(existsSync(join(sessionPath, 'scope.md')), true);
+    const scope = readFileSync(join(target, 'docs', 'scope.md'), 'utf8');
+    assert.match(scope, /## The one thing/);
+    assert.match(scope, /Workout logging/);
 
     const codexPrompt = runCli(['prd', 'handoff', '--to', 'codex', '--target', target]);
     assert.match(codexPrompt, /Codex Implementation Handoff/);
@@ -116,7 +125,9 @@ try {
       'They cannot tell whether training improves',
       'Scattered notes',
       'Log, review, summary',
-      'MVP: logging and trend; excludes social',
+      'Logging, trend, summary',
+      'Workout logging',
+      'No social features in v1',
       'Sets, reps, weight',
       'Volume must be deterministic',
       'AI only summarizes',
@@ -146,7 +157,9 @@ try {
       'Quickly agree on a fun date plan',
       'Chatting on WeChat',
       'Pick date, time, food, activity',
-      'Whole flow must work; polish later',
+      'Date picker, food picker, activity picker',
+      'Generate a shareable date plan',
+      'No accounts or backend in v1',
       'No backend; can bind to phone calendar',
       'Keep it lighthearted; avoid pressuring users',
       'Within three minutes two people get a plan',
@@ -156,6 +169,26 @@ try {
 
     const checkOutput = runCli(['prd', 'check', '--target', target]);
     assert.match(checkOutput, /WARN AI boundary declared/);
+  }
+
+  {
+    // prd check --strict fails (exit 1) when prioritization is missing.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-strict-'));
+    tempRoots.push(target);
+    runCli(['prd', '--target', target], { input: 'A small tool\nSome users\nA real pain\n' });
+
+    let failed = false;
+    let out = '';
+    try {
+      runCli(['prd', 'check', '--strict', '--target', target]);
+    } catch (error) {
+      failed = true;
+      out = error.stdout || '';
+    }
+    assert.equal(failed, true, 'strict check should exit non-zero when required checks fail');
+    assert.match(out, /FAIL Non-goals declared/);
+    assert.match(out, /FAIL The one thing chosen/);
+    assert.equal(existsSync(join(target, 'docs', 'scope.md')), true);
   }
 
   {

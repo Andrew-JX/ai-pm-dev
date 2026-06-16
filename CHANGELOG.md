@@ -2,6 +2,13 @@
 
 ## Unreleased — 1.1.0 (Project Operating Layer + Quality Gate)
 
+Force the hard PM work (cut scope, set priorities) instead of only collecting answers:
+
+- PRD interview now forces prioritization: must-haves capped at 3 (interactive re-asks you to cut), required non-goals, a required "the one thing", and a required single measurable metric.
+- Each PRD session and `docs/scope.md` records must-haves / the one thing / non-goals / the cut list / the metric.
+- `prd check` adds required forcing checks; `prd check --strict` exits non-zero when prioritization/cutting is missing, so it can gate a commit or CI run.
+
+
 Operating layer:
 
 - `init` now installs a project operating layer: `AGENTS.md` (the entry file for downstream AI tools), a `docs/` core stub set (`PROJECT_BRIEF`, `UI_SPEC`, `acceptance-tests`, `decision-log`, `open-questions`, `progress`, `troubleshooting`), and a thin `CLAUDE.md` that points to `AGENTS.md`.

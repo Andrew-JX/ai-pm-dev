@@ -101,6 +101,24 @@ With `--from-note`, the first line of the file becomes the idea, the rest is sav
 `prd check` reports `PASS/WARN/FAIL`. For a product with no AI, AI-specific gaps are **WARN
 ("mark not-applicable")**, not FAIL.
 
+### It forces the hard PM calls
+
+The interview does not just collect answers — it makes you cut and prioritize:
+
+- **Must-haves are capped at 3.** List more and you are made to cut (interactively it
+  re-asks; the overflow is recorded as deferred in `scope.md`).
+- **Non-goals are required** — you must name something you are deliberately *not* doing.
+- **The one thing** — pick the single feature that proves the idea if you could ship one.
+- **A single measurable success metric** is required.
+
+Each session writes a `scope.md` (must-haves / the one thing / non-goals / cut list / metric).
+And `prd check --strict` **exits non-zero** when these are missing, so you can gate a commit
+or CI run on it:
+
+```bash
+ai-pm-dev prd check --strict   # exit 1 if scope/prioritization is not done
+```
+
 ## Keep docs current (one line each)
 
 Updating a doc should not mean opening a file. As you build, log decisions and pitfalls
