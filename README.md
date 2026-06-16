@@ -103,13 +103,13 @@ With `--from-note`, the first line of the file becomes the idea, the rest is sav
 
 ### It forces the hard PM calls
 
-The interview does not just collect answers — it makes you cut and prioritize:
+The interview is built around cutting and prioritizing (the prompts ask for it; the form
+does not nag — rigor lives in the gate below and in the downstream AI's PM-challenge protocol):
 
-- **Must-haves are capped at 3.** List more and you are made to cut (interactively it
-  re-asks; the overflow is recorded as deferred in `scope.md`).
-- **Non-goals are required** — you must name something you are deliberately *not* doing.
-- **The one thing** — pick the single feature that proves the idea if you could ship one.
-- **A single measurable success metric** is required.
+- **Must-haves are capped at 3.** Anything over the line is recorded as deferred in `scope.md`.
+- **Non-goals** — name something you are deliberately *not* doing.
+- **The one thing** — the single feature that proves the idea if you could ship one.
+- **A single measurable success metric.**
 
 Each session writes a `scope.md` (must-haves / the one thing / non-goals / cut list / metric).
 And `prd check --strict` **exits non-zero** when these are missing, so you can gate a commit

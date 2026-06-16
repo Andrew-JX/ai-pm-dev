@@ -339,21 +339,18 @@ const prdQuestions = [
     label: 'MVP must-haves',
     prompt: 'List the v1 must-haves — at most 3. More than 3 means you have not prioritized.',
     promptZh: '列出 v1 的必做项 —— 最多 3 个。超过 3 个就是还没定优先级。',
-    maxItems: 3,
   },
   {
     key: 'oneThing',
     label: 'The one thing',
     prompt: 'If you could ship only ONE of those, which one proves the idea?',
     promptZh: '如果只能上线其中一个，哪一个能验证这个想法？',
-    required: true,
   },
   {
     key: 'nonGoals',
     label: 'Non-goals',
     prompt: 'Name at least one thing you are deliberately NOT doing in v1 (and why).',
     promptZh: '至少说出一件 v1 故意不做的事（以及为什么）。',
-    required: true,
   },
   {
     key: 'dataModel',
@@ -393,7 +390,6 @@ const prdQuestions = [
     label: 'Primary success metric',
     prompt: 'One measurable signal that v1 worked (a single number or observable result).',
     promptZh: '一个可衡量的成功信号（单一数字或可观察的结果）。',
-    required: true,
   },
 ];
 
@@ -1001,23 +997,13 @@ async function runPrdInterview(args) {
     if (notedIdea) {
       console.log(`${ideaLabel}: ${notedIdea}\n`);
     }
+    // The prompts carry the forcing wording (max 3, required non-goal, the one thing),
+    // but the form does not nag or block — a dumb form cannot tell a real cut from a
+    // typed-anything answer. Rigor lives in the LLM PM-challenge protocol, in scope.md,
+    // and in the opt-in `prd check --strict` gate, not in re-asking here.
     for (const [index, question] of questions.entries()) {
-      let answer = (await rl.question(`${questionText(question, index, lang)}\n> `)).trim();
-      // Force an answer for the prioritization questions — re-ask once.
-      if (question.required && !answer) {
-        const nudge = lang === 'zh'
-          ? '这一项必须回答，这正是最该想清楚的。再答一次：'
-          : 'This one is required — it is the point of the exercise. Answer again:';
-        answer = (await rl.question(`${nudge}\n> `)).trim();
-      }
-      // Force prioritization — cap the number of must-haves, re-ask once to cut.
-      if (question.maxItems && countItems(answer) > question.maxItems) {
-        const nudge = lang === 'zh'
-          ? `你列了 ${countItems(answer)} 个，最多 ${question.maxItems} 个。砍到 ${question.maxItems} 个：`
-          : `You listed ${countItems(answer)}; keep at most ${question.maxItems}. Cut to ${question.maxItems}:`;
-        answer = (await rl.question(`${nudge}\n> `)).trim();
-      }
-      answers[question.key] = answer;
+      const answer = await rl.question(`${questionText(question, index, lang)}\n> `);
+      answers[question.key] = answer.trim();
     }
   } finally {
     rl.close();
