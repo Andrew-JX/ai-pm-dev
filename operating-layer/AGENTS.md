@@ -51,6 +51,24 @@ The goal is not only to ship the feature, but for the user to be able to explain
 - Never delete the user's own comments, notes, or progress markers when editing — they are
   thinking scaffolding, not noise.
 
+## PM challenge (before a spec, PRD, or a new feature)
+
+Do the hard PM work — do not accept a feature wishlist at face value. Before writing a spec,
+a PRD, or building a new feature, interrogate the user until these are settled:
+
+1. **Rank.** Make the user order the candidate features by value, out loud.
+2. **Cut to 3.** Refuse to proceed with more than 3 must-haves for v1. Make them defer the rest.
+3. **The one thing.** Ask which single feature proves the idea if they could ship only one.
+4. **A non-goal.** Make them name at least one thing v1 will deliberately not do, and why.
+5. **One metric.** Make them commit to a single measurable success signal.
+6. **Defend the boundary.** If they try to re-add a cut item later, ask what they will drop to
+   make room — scope is a fixed budget, not a growing list.
+
+Do not write the PRD or the code until 1–5 are answered. Push back on vague answers; ask the
+sharp follow-up. Record the result with `ai-pm-dev prd` and verify with `ai-pm-dev prd check
+--strict` (it fails until the cutting is done). The goal is to force the decision, not to be
+agreeable.
+
 ## Docs manifest
 
 `init` creates the core set as stubs. Heavier or stack-specific docs are declared here and

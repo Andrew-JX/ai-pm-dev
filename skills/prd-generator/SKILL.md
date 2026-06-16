@@ -24,15 +24,19 @@ Convert a vague idea into a structured AI-PRD, prototype brief, and downstream h
 ## Workflow
 
 1. Interview before writing. Do not generate a PRD from a one-line idea without identifying missing context.
-2. Separate deterministic rules from AI behavior.
-3. Define what AI may do, what it must not decide, and what evidence must be shown.
-4. Convert the answers into an AI-PRD using `templates/ai-prd-template.md`.
-5. Generate handoff prompts for implementation, prototype generation, and design work.
-6. Save the conversation and structured answers so the project can be resumed later.
+2. Force the cut before writing the PRD: make the user rank candidate features, cut must-haves to at most 3, pick the one thing that proves the idea, name at least one explicit non-goal, and commit to a single measurable metric. Push back on vague answers instead of accepting them.
+3. Separate deterministic rules from AI behavior.
+4. Define what AI may do, what it must not decide, and what evidence must be shown.
+5. Convert the answers into an AI-PRD using `templates/ai-prd-template.md`.
+6. Generate handoff prompts for implementation, prototype generation, and design work.
+7. Save the conversation and structured answers so the project can be resumed later.
+8. Verify with `ai-pm-dev prd check --strict` — it fails until the scope is actually cut.
 
 ## Prohibited Behavior
 
 - Do not invent users, risks, or acceptance criteria when the user has not supplied enough information.
+- Do not write the PRD before the user has cut must-haves to 3, named a non-goal, and chosen the one thing.
+- Do not be agreeable at the cost of the cut; the value is forcing the prioritization decision.
 - Do not let AI own calculations, permissions, safety decisions, or source-of-truth product state.
 - Do not produce only a human-readable essay. The output must be structured enough for downstream agents.
 - Do not skip acceptance criteria.
