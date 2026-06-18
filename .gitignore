@@ -1,0 +1,11 @@
+# AI PM Dev runtime output — generated when the CLI is run inside this repo during testing.
+# These belong in a target project, not in the tool's own repo.
+.ai-pm-dev/
+/docs/
+memory/current-ai-prd.md
+memory/current-task-prompt.md
+
+# Node
+node_modules/
+*.tgz
+.npm-cache-test/
