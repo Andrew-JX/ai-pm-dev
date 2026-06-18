@@ -18,6 +18,37 @@ prompt by hand.
 It does **not** call an LLM API, run Dify, or execute agents itself. It prepares the context
 and quality gates that make the tools you already use produce better, more consistent work.
 
+## How it assists development
+
+It does not write the code for you. It encodes a **division of labor** between you and the
+AI coding tools you already use (Codex, Claude Code, v0), and keeps both sides honest so the
+collaboration stays traceable and resistant to drift and hallucination.
+
+**You own the judgment.** Requirement boundaries, what to cut, priorities, data and
+permission decisions, risk limits. The tool *forces* these instead of letting them stay
+vague: the PM interview caps must-haves at 3, requires a non-goal and a single metric, and
+writes a `scope.md`; `prd check --strict` fails until the cutting is done.
+
+**The AI does the execution.** Scaffolding, CRUD, wiring, drafts, tests. It works from the
+project's `AGENTS.md` + `docs/`, so you don't re-explain context every session — the thing
+that usually makes AI pair-programming feel like starting over each time.
+
+**The tool keeps it traceable and hallucination-resistant:**
+
+| Risk in AI-assisted dev | What this tool does |
+| --- | --- |
+| Context rebuilt every chat | Operating layer (`AGENTS.md` + `docs/`) is a single source of truth the AI reads on open |
+| AI jumps straight to code | PM-challenge protocol forces rank → cut → one thing → non-goal → metric first |
+| Scope / priorities never pinned | `scope.md` + `prd check --strict` gate (exit non-zero, gateable in CI/commit) |
+| "Why did we decide X?" lost in chat | One-line `decide` / `pitfall` / `note` append to `decision-log.md` / `troubleshooting.md` |
+| AI builds something off-spec | `code-review` does an **intent-vs-implementation reconciliation**: did the code actually deliver `acceptance-tests.md` and `scope.md`, or sneak in a non-goal |
+| Docs drift from reality | `doctor` flags docs that are still empty stubs |
+
+**The loop:** idea → forced PRD (cut scope, set the metric) → install operating layer → the
+downstream AI builds by reading `AGENTS.md` → you log decisions/pitfalls as you go → review
+checks the code against the PRD. It is a *soft workflow* around one capable model, not a
+multi-agent system — the value is a stable, verifiable process, not agent count.
+
 ## See it work
 
 [`examples/quick-date/`](examples/quick-date/) is a full end-to-end run on one real idea:
