@@ -6,6 +6,22 @@ Turn a rough product idea into a structured PRD **and a project that downstream 
 tools (Claude Code, Codex, v0, Figma) already know how to work in** — without writing a
 prompt by hand.
 
+**The loop it installs** — inbound context, a forced PRD, an operating layer, build, recording, a gate, and outbound handoff:
+
+```mermaid
+flowchart LR
+  A(["idea or note"]) --> B["prd: force the cut<br/>scope.md"]
+  B --> C["operating layer<br/>AGENTS.md + docs/"]
+  C --> D["build<br/>plan, code, fix, review, release"]
+  D --> E["handoff<br/>Codex, v0, Figma"]
+
+  BR(["brief"]) -->|inbound context| D
+  D -->|record| DOC[("docs/")]
+  DOC -->|resume| BR
+  D -->|checkpoint| TL[("timeline")]
+  G{{"prd check --strict + install-hook"}} -->|gate| D
+```
+
 `ai-pm-dev` is a local CLI. It does two things:
 
 1. **Interviews you** about a product idea and generates an AI-PRD, prototype brief, and

@@ -5,6 +5,22 @@
 把一个粗糙的产品想法，变成一份结构化 PRD，**以及一个下游 AI 编码工具（Claude Code、Codex、v0、
 Figma）一打开就知道怎么干活的项目** —— 你不需要手写一长段 prompt。
 
+**它安装的协作闭环** —— 入站上下文、被强制砍过的 PRD、操作层、开发、记录、门禁、出站交接：
+
+```mermaid
+flowchart LR
+  A(["想法 / 笔记"]) --> B["prd：强制砍需求<br/>scope.md"]
+  B --> C["操作层<br/>AGENTS.md + docs/"]
+  C --> D["开发<br/>计划·实现·修复·审查·发布"]
+  D --> E["交接<br/>Codex · v0 · Figma"]
+
+  BR(["brief"]) -->|入站上下文| D
+  D -->|记录| DOC[("docs/")]
+  DOC -->|续上| BR
+  D -->|打点| TL[("timeline")]
+  G{{"prd check --strict + install-hook"}} -->|门禁| D
+```
+
 `ai-pm-dev` 是一个本地 CLI，做两件事：
 
 1. **访谈你的想法**，生成 AI-PRD、原型 brief，以及面向各工具的 handoff。
