@@ -20,8 +20,9 @@ description: Use when the user has confirmed an implementation plan or explicitl
 ## 执行流程
 
 1. 读取相关文件，确认不会覆盖用户已有修改。
-2. 按计划小步修改。
+2. 按计划一次只做一个**最小闭环**，做完即验证，再做下一个，不要一口气堆完整模块。
 3. 保持改动聚焦，不做无关重构；如果实际改动将超过 5 个文件，先停下说明拆分方案。
+   遇到人主导的决策（数据结构、权限/安全边界、破坏性变更）先停下确认，不要默默替用户决定。
 4. 对核心逻辑、算法、AI/tool loop、状态机、安全或持久化相关改动，保留可解释的实现路径，避免黑盒式生成。
 5. 完成一段功能后，讲清主链：请求 → 入口/Controller → Service/逻辑 → 数据/Mapper/SQL → 用户看到的变化；并精读最关键的 3 到 6 个文件，而不是泛泛总结。
 6. 更新必要文档或模板，包括决策记录、踩坑记录、接口文档或 release checklist。可用一行命令：`ai-pm-dev decide/note/pitfall/keyword/learned`。

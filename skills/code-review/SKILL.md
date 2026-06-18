@@ -23,7 +23,7 @@ description: Use when the user asks to review code, inspect quality, find risks,
 2. 阅读相关 diff 和上下文文件。
 3. 对照项目本地规则、分层约束、接口契约、数据契约和 UI 规范。
 4. 做意图-实现对账：把代码实际行为和文档声称的行为对齐——`docs/acceptance-tests.md` 的每条验收是否真有代码兑现、`docs/scope.md` 的必做项是否都落地、是否偷偷做了 `docs/scope.md` 里写明不做的非目标。把每一处偏差作为一类 finding 列出（声称 X，实际 Y，在哪个文件）。
-5. 优先找会导致错误、回归、数据问题、安全问题或维护风险的点。
+5. 优先找会导致错误、回归、数据问题、安全问题或维护风险的点；重点核对人主导的边界——权限、数据流与一致性、事务、安全——这些 AI 实现时最容易偏。
 6. 检查测试、构建、lint、type-check、smoke 或手动验证是否覆盖关键路径。
 7. 检查是否遗漏必要的决策记录、踩坑记录或 release 说明。
 8. 按严重程度输出发现。

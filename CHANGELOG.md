@@ -41,6 +41,14 @@ Lower the friction of first use:
 - `init` now prints concrete next steps (`prd`, `doctor`) and how downstream tools pick up the project.
 - Add a `LICENSE` file (MIT) and an `engines` field (Node >= 18).
 
+Balance the lifecycle — flesh out the development-side skills so it is a full product flow, not just product/PM:
+
+- `dev-planner`: plan in vertical minimal slices aligned to `scope.md`, define each slice's "done = correct" before coding, and mark the human-led-vs-AI-executed boundary (data model, permission/security, destructive changes are human-confirmed).
+- `dev-builder`: one minimal closed loop at a time (build → verify → next); stop and confirm before silently making a boundary decision.
+- `bug-fixer`: isolate by layer (frontend/backend/db/config/deps) following logs and runtime, narrow systematically by bisection instead of guessing, and add a regression guard after the fix.
+- `code-review`: focus the review on human-owned boundaries (permissions, data flow/consistency, transactions, security) where AI implementations drift most.
+- `release-builder`: a "real, not a demo" check against `acceptance-tests.md` / `PROJECT_BRIEF.md`, real-user-path smoke, secrets-not-in-repo, and a rehearsed rollback.
+
 Build-to-learn collaboration (so the project becomes capability, not just a finished feature):
 
 - Add `ai-pm-dev keyword "<term>" --explain ...` and `ai-pm-dev learned "<own words>"`, appending to on-demand `docs/keywords.md` and `docs/learning-log.md` (no bloat for normal projects).
