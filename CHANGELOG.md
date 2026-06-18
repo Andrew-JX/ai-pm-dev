@@ -2,6 +2,13 @@
 
 ## Unreleased — 1.1.0 (Project Operating Layer + Quality Gate)
 
+Collaboration mechanisms — close the inbound side of context and record the lifecycle:
+
+- Add `ai-pm-dev brief`: a one-shot, paste-ready digest (one-liner, must-haves, the one thing, non-goals, open questions, recent decisions, progress, pitfalls, next step) to resume in a fresh AI session or hand to a new tool. The inbound counterpart to the outbound handoffs.
+- Add `ai-pm-dev ask "<question>"`: append a clarifying question to `docs/open-questions.md` so it does not evaporate in chat; resolve it later with `decide`.
+- Add `ai-pm-dev checkpoint "<phase>"` and `ai-pm-dev timeline`: record and view the session lifecycle (`prd` auto-records a checkpoint; mark build/verify/release yourself).
+
+
 Force the hard PM work (cut scope, set priorities) instead of only collecting answers:
 
 - PRD interview is built around prioritization: must-haves capped at 3, a non-goal, "the one thing", and a single measurable metric. The form carries the forcing wording but does not nag — rigor lives in the gate and the downstream AI's PM-challenge protocol.

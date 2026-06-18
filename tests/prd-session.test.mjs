@@ -137,6 +137,10 @@ try {
     ].join('\n');
     runCli(['prd', '--target', target], { input: `${answers}\n` });
 
+    // prd auto-records a checkpoint in the session timeline.
+    const timeline = runCli(['timeline', '--target', target]);
+    assert.match(timeline, /prd/);
+
     const checkOutput = runCli(['prd', 'check', '--target', target]);
     assert.match(checkOutput, /PRD Quality Check/);
     assert.match(checkOutput, /Overall: PASS/);

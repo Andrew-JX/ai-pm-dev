@@ -35,6 +35,10 @@ Usage:
   ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]
   ai-pm-dev keyword "<term>" --explain "<plain words>" [--example <e>] [--target <path>]
   ai-pm-dev learned "<understanding in your own words>" [--target <path>]
+  ai-pm-dev ask "<question>" [--why <reason>] [--target <path>]
+  ai-pm-dev brief [--target <path>]
+  ai-pm-dev checkpoint "<phase>" [--note <note>] [--target <path>]
+  ai-pm-dev timeline [--target <path>]
   ai-pm-dev install-hook [--target <path>]
   ai-pm-dev uninstall-hook [--target <path>]
   ai-pm-dev status [--target <path>]
@@ -54,6 +58,10 @@ Commands:
   pitfall        Append a one-line pitfall to docs/troubleshooting.md.
   keyword        Append a key-term card to docs/keywords.md.
   learned        Append an own-words understanding note to docs/learning-log.md.
+  ask            Append a clarifying question to docs/open-questions.md.
+  brief          Print a paste-ready context digest to resume in a fresh AI session.
+  checkpoint     Record a session lifecycle checkpoint (idea/prd/build/verify/release).
+  timeline       Show the recorded session checkpoints.
   install-hook   Install a git pre-commit gate: block commits that skip docs/ updates.
   uninstall-hook Remove the ai-pm-dev pre-commit gate.
   status         Show the saved task state for a target project.
@@ -858,6 +866,136 @@ function runLearned(args) {
   return `Logged learning note -> ${path}\n`;
 }
 
+const OPEN_QUESTIONS_HEADER = '# Open Questions\n\n| Question | Why it matters | Status |\n| --- | --- | --- |\n';
+
+function runAsk(args) {
+  const question = appendMessage(args, 'Usage: ai-pm-dev ask "<question>" [--why <reason>] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const why = parseValue(args, '--why');
+  const path = join(target, 'docs', 'open-questions.md');
+  appendRows(path, OPEN_QUESTIONS_HEADER, [`| ${cell(question)} | ${cell(why) || 'raised during work'} | open |`]);
+  return `Logged open question -> ${path}\n`;
+}
+
+// ---- session lifecycle ----
+function timelinePath(target) {
+  return join(target, '.ai-pm-dev', 'timeline.json');
+}
+
+function readTimeline(target) {
+  const path = timelinePath(target);
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : [];
+}
+
+function appendCheckpoint(target, phase, note) {
+  const timeline = readTimeline(target);
+  timeline.push({ at: new Date().toISOString(), phase, note: note || '' });
+  mkdirSync(dirname(timelinePath(target)), { recursive: true });
+  writeFileSync(timelinePath(target), `${JSON.stringify(timeline, null, 2)}\n`, 'utf8');
+}
+
+function runCheckpoint(args) {
+  const phase = appendMessage(args, 'Usage: ai-pm-dev checkpoint "<phase>" [--note <note>] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  appendCheckpoint(target, phase, parseValue(args, '--note'));
+  return `Checkpoint recorded: ${phase} -> ${timelinePath(target)}\n`;
+}
+
+function runTimeline(args) {
+  const target = resolve(parseTarget(args));
+  const timeline = readTimeline(target);
+  if (!timeline.length) {
+    return `No checkpoints yet for ${target}\nRecord one: ai-pm-dev checkpoint "<phase>"\n`;
+  }
+  const lines = timeline.map((c) => `${c.at.slice(0, 16).replace('T', ' ')}  ${c.phase}${c.note ? ` — ${oneLine(c.note)}` : ''}`);
+  return `Session timeline\n\n${lines.join('\n')}\n`;
+}
+
+// ---- inbound context: brief ----
+function tableCells(row) {
+  return row.split('|').slice(1, -1).map((value) => value.trim());
+}
+
+function recentTableRows(path, limit) {
+  if (!existsSync(path)) {
+    return [];
+  }
+  const rows = readFileSync(path, 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|'))
+    .filter((line) => !/^\|[\s|:-]*\|?$/.test(line))
+    .filter((line) => !PLACEHOLDER.test(line));
+  return rows.slice(1).slice(-limit);
+}
+
+function readNextStep(target) {
+  const statePath = join(target, '.ai-pm-dev', 'state.json');
+  if (existsSync(statePath)) {
+    try {
+      return JSON.parse(readFileSync(statePath, 'utf8')).nextStep || '';
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+function briefSection(title, lines) {
+  return lines.length ? `\n${title}:\n${lines.join('\n')}\n` : '';
+}
+
+function runBrief(args) {
+  const target = resolve(parseTarget(args));
+  const docs = (name) => join(target, 'docs', name);
+
+  let idea = '';
+  let musts = '';
+  let one = '';
+  let nons = '';
+  let metric = '';
+  const sessionPath = latestPrdSession(target);
+  if (sessionPath && existsSync(join(sessionPath, 'answers.json'))) {
+    const a = JSON.parse(readFileSync(join(sessionPath, 'answers.json'), 'utf8'));
+    idea = (a.idea || '').trim();
+    musts = (a.mvpScope || '').trim();
+    one = (a.oneThing || '').trim();
+    nons = (a.nonGoals || '').trim();
+    metric = (a.acceptanceCriteria || '').trim();
+  }
+
+  const decisions = recentTableRows(docs('decision-log.md'), 3).map((r) => {
+    const c = tableCells(r);
+    return `- ${c[1]}${c[2] && c[2] !== '-' ? ` — ${c[2]}` : ''}`;
+  });
+  const pitfalls = recentTableRows(docs('troubleshooting.md'), 3).map((r) => {
+    const c = tableCells(r);
+    return `- ${c[0]}${c[2] && c[2] !== '-' ? ` → ${c[2]}` : ''}`;
+  });
+  const questions = recentTableRows(docs('open-questions.md'), 5).map((r) => `- ${tableCells(r)[0]}`);
+  const progress = existsSync(docs('progress.md'))
+    ? readFileSync(docs('progress.md'), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('- ')).slice(-3)
+    : [];
+  const next = readNextStep(target);
+
+  const head = [
+    `One-liner: ${idea || '(run ai-pm-dev prd)'}`,
+    musts ? `Must-haves (v1): ${oneLine(musts)}` : '',
+    one ? `The one thing: ${oneLine(one)}` : '',
+    nons ? `Non-goals: ${oneLine(nons)}` : '',
+    metric ? `Primary metric: ${oneLine(metric)}` : '',
+  ].filter(Boolean).join('\n');
+
+  return `# Project brief — paste this to resume in a fresh AI session
+
+${head}
+${briefSection('Open questions', questions)}${briefSection('Recent decisions', decisions)}${briefSection('Recent progress', progress)}${briefSection('Known pitfalls', pitfalls)}
+Next: ${next || 'run ai-pm-dev prd, then build the must-haves'}
+Rules: follow AGENTS.md — read docs/ before work, record into docs/ after via
+ai-pm-dev decide/note/pitfall/ask (never a separate CHANGELOG). Verify with prd check.
+`;
+}
+
 function writeProjectDocs(targetRoot, answers) {
   const docsDir = join(targetRoot, 'docs');
   seedDoc(join(docsDir, 'PROJECT_BRIEF.md'), buildProjectBriefDoc(answers));
@@ -877,11 +1015,7 @@ function writeProjectDocs(targetRoot, answers) {
   const blanks = prdQuestions
     .filter((question) => !(answers[question.key] || '').trim())
     .map((question) => `| ${question.label}: ${oneLine(question.prompt)} | Left blank in PRD interview | open |`);
-  appendRows(
-    join(docsDir, 'open-questions.md'),
-    '# Open Questions\n\n| Question | Why it matters | Status |\n| --- | --- | --- |\n',
-    blanks,
-  );
+  appendRows(join(docsDir, 'open-questions.md'), OPEN_QUESTIONS_HEADER, blanks);
 }
 
 function oneLine(value) {
@@ -955,6 +1089,7 @@ function writePrdAssets(target, answers, sourceNote = '') {
   }, null, 2)}\n`, 'utf8');
 
   writeProjectDocs(targetRoot, answers);
+  appendCheckpoint(targetRoot, 'prd', answers.idea);
 
   return { sessionPath, files };
 }
@@ -1337,6 +1472,14 @@ try {
     process.stdout.write(runKeyword(args));
   } else if (command === 'learned') {
     process.stdout.write(runLearned(args));
+  } else if (command === 'ask') {
+    process.stdout.write(runAsk(args));
+  } else if (command === 'brief') {
+    process.stdout.write(runBrief(args));
+  } else if (command === 'checkpoint') {
+    process.stdout.write(runCheckpoint(args));
+  } else if (command === 'timeline') {
+    process.stdout.write(runTimeline(args));
   } else if (command === 'install-hook') {
     process.stdout.write(runInstallHook(args));
   } else if (command === 'uninstall-hook') {

@@ -20,11 +20,14 @@ in the `docs/` it points to.
 
 ## Before any task
 
-1. Read `docs/PROJECT_BRIEF.md`, `docs/open-questions.md`, and `docs/acceptance-tests.md`.
-2. Read `memory/current-ai-prd.md` if it exists (the latest PRD).
-3. Restate your understanding of the task in one or two sentences.
-4. If a key gap would make the work incorrect, ask at most 5 clarifying questions before coding.
-5. Do not expand scope beyond the MVP until the user confirms. MVP and non-goals live in `docs/PROJECT_BRIEF.md`.
+1. Run `ai-pm-dev brief` for a one-shot digest of where the project is (or read
+   `docs/PROJECT_BRIEF.md`, `docs/open-questions.md`, `docs/acceptance-tests.md`, and
+   `memory/current-ai-prd.md`).
+2. Restate your understanding of the task in one or two sentences.
+3. If a key gap would make the work incorrect, ask at most 5 clarifying questions before
+   coding — and log them with `ai-pm-dev ask "<question>"` so they do not evaporate in chat.
+4. Do not expand scope beyond the MVP until the user confirms. MVP and non-goals live in
+   `docs/PROJECT_BRIEF.md` / `docs/scope.md`.
 
 ## After any task
 
@@ -33,6 +36,8 @@ in the `docs/` it points to.
 3. Update `docs/progress.md` (done / not-done / tests run).
 4. Report: what was completed, what was not, tests run, and residual risk.
 5. Record into `docs/` with the commands below — never spin up a new record file to do it.
+6. At a phase change, mark it: `ai-pm-dev checkpoint "<phase>"` (build / verify / release).
+   See the lifecycle with `ai-pm-dev timeline`.
 
 Fast path — these append one line each so updating is cheap (run from the project root):
 

@@ -89,6 +89,10 @@ just say:
 
 > Continue with this project's AI PM Dev workflow.
 
+To feed a fresh session its context in one shot (the inbound side of handoff), run
+`ai-pm-dev brief` and paste the digest — one-liner, must-haves, open questions, recent
+decisions, progress, pitfalls, and next step.
+
 **B. Paste a handoff prompt.** If your tool does not auto-read project files, copy a
 tool-specific prompt:
 

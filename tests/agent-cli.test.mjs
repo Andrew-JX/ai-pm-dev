@@ -108,6 +108,27 @@ try {
   }
 
   {
+    // ask / checkpoint / timeline / brief collaboration commands.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-collab-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+
+    runCli(['ask', 'websocket or polling for notifications?', '--target', target]);
+    const openQuestions = readFileSync(join(target, 'docs', 'open-questions.md'), 'utf8');
+    assert.match(openQuestions, /websocket or polling for notifications\?/);
+
+    runCli(['checkpoint', 'build', '--note', 'crud done', '--target', target]);
+    const timeline = runCli(['timeline', '--target', target]);
+    assert.match(timeline, /build — crud done/);
+
+    runCli(['decide', 'ship web first', '--why', 'speed', '--target', target]);
+    const brief = runCli(['brief', '--target', target]);
+    assert.match(brief, /Project brief/);
+    assert.match(brief, /ship web first/);
+    assert.match(brief, /websocket or polling/);
+  }
+
+  {
     // install-hook writes a git pre-commit gate; uninstall removes it; foreign hooks are protected.
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-hook-'));
     tempRoots.push(target);
