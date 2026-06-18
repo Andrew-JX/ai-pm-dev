@@ -10,6 +10,14 @@ This project uses the AI PM Dev operating layer. Any AI tool working here reads 
 first, then follows the protocol below. Do not invent process — it lives in this file and
 in the `docs/` it points to.
 
+> **Single source of record — read this first.**
+> Decisions, progress, and pitfalls live in `docs/` only, logged with
+> `ai-pm-dev decide / note / pitfall`. **Do not create a separate `CHANGELOG.md`,
+> `NOTES.md`, `DECISIONS.md`, or any ad-hoc record file** — that splits the record and
+> defeats the operating layer. (A `CHANGELOG.md` is acceptable *only* for user-facing
+> release notes, never for decisions or iteration rationale.) If `docs/` is still empty
+> stubs, that means nobody has been recording — fill it, do not route around it.
+
 ## Before any task
 
 1. Read `docs/PROJECT_BRIEF.md`, `docs/open-questions.md`, and `docs/acceptance-tests.md`.
@@ -24,6 +32,7 @@ in the `docs/` it points to.
 2. Update `docs/open-questions.md` (resolve answered ones, add new gaps).
 3. Update `docs/progress.md` (done / not-done / tests run).
 4. Report: what was completed, what was not, tests run, and residual risk.
+5. Record into `docs/` with the commands below — never spin up a new record file to do it.
 
 Fast path — these append one line each so updating is cheap (run from the project root):
 

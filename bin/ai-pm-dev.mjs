@@ -231,6 +231,12 @@ function runDoctor(args) {
       ? `Docs still empty stubs: ${stubDocs.join(', ')}\n  Fill with: ai-pm-dev decide/note/pitfall, or ai-pm-dev prd`
       : 'Docs filled: all core docs have content')
     : '';
+  // Catch the common drift: a separate CHANGELOG while the operating-layer record is empty.
+  const competingRecord = operatingLayerOk
+    && existsSync(join(target, 'CHANGELOG.md'))
+    && docIsStub(join(target, 'docs', 'decision-log.md'))
+    ? 'CHANGELOG.md exists but docs/decision-log.md is empty — record decisions with ai-pm-dev decide, not a separate file'
+    : '';
   const promptExists = targetExists && existsSync(join(target, 'memory', 'current-task-prompt.md'));
   const stateExists = targetExists && existsSync(join(target, '.ai-pm-dev', 'state.json'));
   const installedSkillCount = targetExists && existsSync(join(target, 'skills'))
@@ -246,7 +252,7 @@ Target: ${target}
 ${formatCheck('Package assets', packageAssetsOk, 'Reinstall with: npm install -g github:Andrew-JX/ai-pm-dev')}
 ${formatCheck('Target exists', targetExists, `Create the directory or check the path: ${target}`)}
 ${formatCheck('Target initialized', targetInitialized, `ai-pm-dev init "${target}"`)}
-${formatCheck('Operating layer (AGENTS.md + docs/)', operatingLayerOk, `ai-pm-dev init "${target}"`)}${docsNudge ? `\n${docsNudge}` : ''}
+${formatCheck('Operating layer (AGENTS.md + docs/)', operatingLayerOk, `ai-pm-dev init "${target}"`)}${docsNudge ? `\n${docsNudge}` : ''}${competingRecord ? `\n${competingRecord}` : ''}
 Installed skills: ${installedSkillCount}/${requiredSkills.length}
 ${formatCheck('Task prompt', promptExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}
 ${formatCheck('Task state', stateExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}

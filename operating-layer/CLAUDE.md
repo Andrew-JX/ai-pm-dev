@@ -24,3 +24,6 @@ Order: `Spec -> Design Brief -> Design -> Dev Plan -> Build -> Bug Fix -> Review
 Before starting, read `docs/PROJECT_BRIEF.md`, `docs/open-questions.md`, and
 `docs/acceptance-tests.md`. After finishing, update `docs/decision-log.md`,
 `docs/open-questions.md`, and `docs/progress.md`, then report done / not-done / tests / risk.
+
+**Record decisions in `docs/` via `ai-pm-dev decide / note / pitfall` — do not create a
+separate `CHANGELOG.md` or ad-hoc notes file for them.**

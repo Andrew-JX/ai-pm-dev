@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +62,21 @@ try {
     assert.match(output, /Operating layer \(AGENTS\.md \+ docs\/\): PASS/);
     assert.match(output, /Task prompt: PASS/);
     assert.match(output, /Task state: PASS/);
+  }
+
+  {
+    // doctor warns when a separate CHANGELOG.md exists while decision-log is still empty.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-doctor-changelog-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+    writeFileSync(join(target, 'CHANGELOG.md'), '# Changelog\n', 'utf8');
+
+    const warned = runCli(['doctor', '--target', target]);
+    assert.match(warned, /CHANGELOG\.md exists but docs\/decision-log\.md is empty/);
+
+    runCli(['decide', 'use the operating layer', '--why', 'single record source', '--target', target]);
+    const cleared = runCli(['doctor', '--target', target]);
+    assert.doesNotMatch(cleared, /CHANGELOG\.md exists but/);
   }
 
   {
