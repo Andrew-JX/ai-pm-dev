@@ -157,6 +157,15 @@ ai-pm-dev note "完成端到端主流程"
 
 `ai-pm-dev doctor` 会列出仍是空模板的核心文档，让文档漂移可见。
 
+想要硬门禁(opt-in),装一个 git pre-commit hook:**代码改了但 `docs/` 没更新,就拦下这次提交**——
+记录绕不过去,连 AI 都跳不了:
+
+```bash
+ai-pm-dev install-hook       # 拦下只改代码、不更新 docs 的提交
+ai-pm-dev uninstall-hook     # 移除
+# 故意跳过某一次提交: git commit --no-verify
+```
+
 如果你是「以做促学」，还有两条追加到 `docs/keywords.md` 和 `docs/learning-log.md`
 （按需创建，不会污染普通项目）：
 

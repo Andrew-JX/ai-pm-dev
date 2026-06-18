@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -35,6 +35,8 @@ Usage:
   ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]
   ai-pm-dev keyword "<term>" --explain "<plain words>" [--example <e>] [--target <path>]
   ai-pm-dev learned "<understanding in your own words>" [--target <path>]
+  ai-pm-dev install-hook [--target <path>]
+  ai-pm-dev uninstall-hook [--target <path>]
   ai-pm-dev status [--target <path>]
   ai-pm-dev doctor [--target <path>]
   ai-pm-dev config get
@@ -52,6 +54,8 @@ Commands:
   pitfall        Append a one-line pitfall to docs/troubleshooting.md.
   keyword        Append a key-term card to docs/keywords.md.
   learned        Append an own-words understanding note to docs/learning-log.md.
+  install-hook   Install a git pre-commit gate: block commits that skip docs/ updates.
+  uninstall-hook Remove the ai-pm-dev pre-commit gate.
   status         Show the saved task state for a target project.
   doctor         Check the package and optional target project setup.
   config         Store or inspect default CLI settings.
@@ -164,6 +168,79 @@ function runStart(args) {
   const defaultTarget = readConfig().defaultTarget;
   const targetArgs = hasTarget || !defaultTarget ? [] : ['--target', defaultTarget];
   return runNodeScript('start-task.mjs', ['--task', task, ...targetArgs, ...rest]);
+}
+
+const HOOK_MARKER = 'AI PM Dev Agent pre-commit gate';
+
+function preCommitScript() {
+  return `#!/bin/sh
+# ${HOOK_MARKER} — installed by \`ai-pm-dev install-hook\`.
+# Blocks a commit that changes work files without recording anything in docs/.
+changed=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$changed" ] && exit 0
+work=$(printf '%s\\n' "$changed" | grep -v '^docs/' | grep -v '^\\.ai-pm-dev/' | grep -v '^memory/' || true)
+docs=$(printf '%s\\n' "$changed" | grep '^docs/' || true)
+if [ -n "$work" ] && [ -z "$docs" ]; then
+  echo "ai-pm-dev: commit blocked — code/content changed but docs/ was not updated."
+  echo "Record this work first (one line each), then 'git add docs/' and commit again:"
+  echo "  ai-pm-dev decide \\"<decision>\\" --why \\"<reason>\\""
+  echo "  ai-pm-dev note \\"<progress>\\""
+  echo "  ai-pm-dev pitfall \\"<symptom>\\" --fix \\"<fix>\\""
+  echo "To bypass on purpose: git commit --no-verify"
+  exit 1
+fi
+exit 0
+`;
+}
+
+function gitHooksDir(target) {
+  const gitDir = join(target, '.git');
+  if (!existsSync(gitDir)) {
+    throw new Error(`Not a git repository (no .git): ${target}. Run "git init" first.`);
+  }
+  if (!statSync(gitDir).isDirectory()) {
+    throw new Error(`.git is not a directory (worktrees/submodules are not supported): ${target}`);
+  }
+  return join(gitDir, 'hooks');
+}
+
+function runInstallHook(args) {
+  const target = resolve(parseTarget(args));
+  const hooksDir = gitHooksDir(target);
+  const hookPath = join(hooksDir, 'pre-commit');
+
+  if (existsSync(hookPath) && !readFileSync(hookPath, 'utf8').includes(HOOK_MARKER)) {
+    throw new Error(`A pre-commit hook already exists and was not created by ai-pm-dev:\n  ${hookPath}\nRemove or merge it manually, then re-run.`);
+  }
+
+  mkdirSync(hooksDir, { recursive: true });
+  writeFileSync(hookPath, preCommitScript(), 'utf8');
+  try {
+    chmodSync(hookPath, 0o755);
+  } catch {
+    // Windows filesystems may not support chmod; Git for Windows runs the hook anyway.
+  }
+
+  return `Installed git pre-commit gate -> ${hookPath}
+
+It blocks any commit that changes code/content without updating docs/.
+Bypass intentionally with: git commit --no-verify
+Remove with: ai-pm-dev uninstall-hook --target "${target}"
+`;
+}
+
+function runUninstallHook(args) {
+  const target = resolve(parseTarget(args));
+  const hookPath = join(target, '.git', 'hooks', 'pre-commit');
+
+  if (!existsSync(hookPath)) {
+    return `No pre-commit hook found at ${hookPath}\n`;
+  }
+  if (!readFileSync(hookPath, 'utf8').includes(HOOK_MARKER)) {
+    throw new Error(`The pre-commit hook was not created by ai-pm-dev; leaving it untouched:\n  ${hookPath}`);
+  }
+  rmSync(hookPath, { force: true });
+  return `Removed ai-pm-dev pre-commit gate from ${hookPath}\n`;
 }
 
 function runStatus(args) {
@@ -1260,6 +1337,10 @@ try {
     process.stdout.write(runKeyword(args));
   } else if (command === 'learned') {
     process.stdout.write(runLearned(args));
+  } else if (command === 'install-hook') {
+    process.stdout.write(runInstallHook(args));
+  } else if (command === 'uninstall-hook') {
+    process.stdout.write(runUninstallHook(args));
   } else if (command === 'status') {
     process.stdout.write(runStatus(args));
   } else if (command === 'doctor') {

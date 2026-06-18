@@ -168,6 +168,15 @@ ai-pm-dev note "finished the end-to-end happy path"
 
 `ai-pm-dev doctor` lists any core docs that are still empty stubs, so drift is visible.
 
+For a hard gate (opt-in), install a git pre-commit hook that **blocks a commit when code
+changed but `docs/` was not updated** — so the recording cannot be skipped, not even by the AI:
+
+```bash
+ai-pm-dev install-hook       # block code-only commits; record into docs/ first
+ai-pm-dev uninstall-hook     # remove it
+# bypass a single commit on purpose: git commit --no-verify
+```
+
 If you are building to learn, two more append into `docs/keywords.md` and
 `docs/learning-log.md` (created on demand, so they don't clutter a normal project):
 

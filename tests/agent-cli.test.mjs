@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +105,52 @@ try {
     assert.doesNotMatch(after, /decision-log\.md/);
     assert.doesNotMatch(after, /troubleshooting\.md/);
     assert.doesNotMatch(after, /progress\.md/);
+  }
+
+  {
+    // install-hook writes a git pre-commit gate; uninstall removes it; foreign hooks are protected.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-hook-'));
+    tempRoots.push(target);
+    mkdirSync(join(target, '.git'));
+
+    const out = runCli(['install-hook', '--target', target]);
+    const hookPath = join(target, '.git', 'hooks', 'pre-commit');
+    assert.match(out, /Installed git pre-commit gate/);
+    assert.equal(existsSync(hookPath), true);
+    const hook = readFileSync(hookPath, 'utf8');
+    assert.match(hook, /AI PM Dev Agent pre-commit gate/);
+    assert.match(hook, /commit blocked/);
+
+    const removed = runCli(['uninstall-hook', '--target', target]);
+    assert.match(removed, /Removed ai-pm-dev pre-commit gate/);
+    assert.equal(existsSync(hookPath), false);
+
+    // A foreign pre-commit hook must not be clobbered.
+    mkdirSync(join(target, '.git', 'hooks'), { recursive: true });
+    writeFileSync(hookPath, '#!/bin/sh\necho mine\n', 'utf8');
+    let refused = false;
+    try {
+      runCli(['install-hook', '--target', target]);
+    } catch (error) {
+      refused = true;
+      assert.match(error.stderr || '', /already exists and was not created by ai-pm-dev/);
+    }
+    assert.equal(refused, true, 'install-hook should refuse to overwrite a foreign hook');
+    assert.equal(readFileSync(hookPath, 'utf8'), '#!/bin/sh\necho mine\n');
+  }
+
+  {
+    // install-hook outside a git repo errors clearly.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-hook-nogit-'));
+    tempRoots.push(target);
+    let errored = false;
+    try {
+      runCli(['install-hook', '--target', target]);
+    } catch (error) {
+      errored = true;
+      assert.match(error.stderr || '', /Not a git repository/);
+    }
+    assert.equal(errored, true);
   }
 } finally {
   for (const root of tempRoots) {

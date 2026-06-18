@@ -52,6 +52,7 @@ Lower the cost of keeping docs current (so they drift less):
 - Add one-line append commands: `ai-pm-dev decide "<decision>" [--why ...]`, `ai-pm-dev note "<progress>"`, `ai-pm-dev pitfall "<symptom>" [--cause ...] [--fix ...]`. They append to `docs/decision-log.md`, `docs/progress.md`, and `docs/troubleshooting.md` and strip the placeholder rows on first real entry.
 - `doctor` now lists core docs that are still empty stubs as a soft reminder to fill or remove them.
 - `AGENTS.md` / `CLAUDE.md` now state the single-source-of-record rule up front: log decisions/progress/pitfalls into `docs/` via the CLI, never spin up a separate `CHANGELOG.md`/`NOTES.md` to record them. `doctor` warns when a `CHANGELOG.md` exists while `docs/decision-log.md` is still empty.
+- Add `ai-pm-dev install-hook` / `uninstall-hook`: an opt-in git pre-commit gate that blocks a commit when code/content changed but `docs/` was not updated (bypass with `git commit --no-verify`). The hard enforcement layer the soft reminders could not provide.
 - Fix: `ai-pm-dev init .` now installs into the user's working directory instead of the package directory.
 
 ## 1.0.0
