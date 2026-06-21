@@ -77,3 +77,14 @@ description: Use when the user wants to start development but the technical appr
 - `architecture.md` — 系统结构与数据流。
 - `roadmap.md` — 阶段与排序。
 - `acceptance-tests.md` — 把验收标准拆成可验证切片。
+
+## AI Collaboration Hardening
+
+Use these guardrails before handing a plan to an AI coding tool:
+
+1. Build a context pack first: `docs/scope.md`, `docs/acceptance-tests.md`, `docs/open-questions.md`, latest PRD session, and any existing architecture/API docs.
+2. Run `ai-pm-dev review-route --paths "<planned files>"` when planned files are known; include the routed docs and checks in the plan.
+3. Keep each slice small enough to review. If the plan touches more than 5 files, split it or write why it cannot be split.
+4. Define the human-owned decisions separately from AI-executable work: data model, permissions, destructive changes, security boundaries, migrations, external costs, and release/rollback choices need human confirmation.
+5. State the verification command or manual flow before implementation starts. A slice without a verification path is not ready.
+6. For larger or risky changes, require `ai-pm-dev decision-record "<title>"` before build work begins, including docs update, verification, and rollback notes.

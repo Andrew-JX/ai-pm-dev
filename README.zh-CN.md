@@ -2,6 +2,8 @@
 
 [English README](README.md)
 
+AI PM Dev Agent 不是通用 Agent 平台，也不是 Dify / Coze 的替代品。它是一个面向 AI 辅助产品开发的本地 **Idea-to-Build workflow CLI**：给项目安装可被 Codex、Claude Code、v0、Figma 读取的协作操作层，并通过 PM 访谈、scope、handoff、记录和 gate，把一次性 AI 对话沉淀成可交接、可复用、可验证的开发流程。
+
 把一个粗糙的产品想法，变成一份结构化 PRD，**以及一个下游 AI 编码工具（Claude Code、Codex、v0、
 Figma）一打开就知道怎么干活的项目** —— 你不需要手写一长段 prompt。
 

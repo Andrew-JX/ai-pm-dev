@@ -279,19 +279,46 @@ product-spec-builder  PROJECT_BRIEF.md
 
 - v1.2 — `ai-pm-dev prd check` quality gate + `quality-report.md` (required vs recommended
   checks; AI gaps are WARN not FAIL; handoff-references-PRD check). DONE.
+  Downstream gate coupling now checks `docs/scope.md`, `docs/acceptance-tests.md`, and
+  all handoffs against the latest PRD gates. DONE.
 - v1.3 — PRD interview: language choice (`--lang zh|en`, interactive prompt when omitted)
   and project-type templates (`--type ai-tool|saas|consumer|internal-tool`) that skip
   AI-specific questions for non-AI products and record them as open questions. DONE.
-  (Deferred sub-item: free-description-then-adaptive follow-ups — needs an LLM step, left for later.)
+  Local adaptive follow-ups for sparse answers now write `follow-up-questions.md` and
+  append priority gap questions into `docs/open-questions.md`. DONE.
+  (Deferred sub-item: LLM-driven free-description parsing remains optional future scope.)
 - v1.4 — `examples/quick-date/`: full end-to-end case (idea -> interview -> PRD -> docs ->
   handoffs -> quality report -> retrospective). DONE. (Prototype screenshot still to add by hand.)
+- v1.5 — `ai-pm-dev dashboard`: read-only HTML project status view for scope, gate status,
+  docs health, open questions, decisions, and timeline. DONE.
+- v1.6 — `ai-pm-dev install-pr-template`: GitHub PR template gate inspired by mature OSS
+  templates (summary, test evidence, release/docs notes) plus AI PM Dev scope checks
+  (PRD session, mapped must-have, non-goal boundary). DONE.
+- v1.7 — `ai-pm-dev decision-record`: KEP-lite decision records for larger changes,
+  capturing summary/why, goals, non-goals, test plan, rollback plan, readiness checks,
+  and a decision-log entry. DONE.
+- v1.8 — `ai-pm-dev install-ownership` + `review-route`: local OWNERS-style routing
+  that maps changed paths to owner skill lenses, docs to read, and required checks. DONE.
+- v1.9 — `ai-pm-dev bug`: structured bug intake that requires actual behavior,
+  expected behavior, minimal reproduction, impact, and verification before fix work. DONE.
+
+- v1.10 — Development skill hardening: `dev-planner`, `dev-builder`, `bug-fixer`,
+  `code-review`, and `release-builder` now carry AI collaboration guardrails for
+  context packs, small reviewable slices, review routing, evidence-first verification,
+  human confirmation on risky boundaries, and rollback readiness. DONE.
+- v1.11 — `ai-pm-dev workflow check` / `skill lint`: static guardrail lint for the
+  development-side skills; `--strict` fails when context, verification, risk boundary,
+  docs update, or rollback guidance is missing. DONE.
+- v1.12 — GitHub-facing positioning refresh: README/package/changelog now state that
+  AI PM Dev Agent is a local Idea-to-Build workflow CLI / workflow kernel, not a
+  general agent platform or Dify/Coze replacement. DONE.
 
 ### Still open
 
 - README.zh-CN.md is valid UTF-8; the observed 乱码 is a PowerShell console rendering issue,
   not file corruption. Action: add a console-encoding note to the README and keep
   `release-check` verifying UTF-8 — no rewrite needed.
-- Adaptive (LLM-driven) follow-up questions for sparse answers.
+- Optional LLM-driven free-description parsing and follow-up refinement.
 - Prototype screenshot / real v0 output in the example.
 
 ## First Real Test

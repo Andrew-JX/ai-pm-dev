@@ -1,7 +1,7 @@
 {
   "name": "ai-pm-dev",
   "version": "1.0.0",
-  "description": "Local CLI agent for installing AI product development workflows and routing tasks.",
+  "description": "Local Idea-to-Build workflow CLI for AI-assisted product development.",
   "license": "MIT",
   "type": "module",
   "engines": {

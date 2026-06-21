@@ -73,3 +73,15 @@ description: Use when the user asks to review code, inspect quality, find risks,
 - `scope.md` — 检查必做项是否落地、是否偷偷做了非目标。
 - `architecture.md` — 检查是否违反既定结构与数据流。
 - `UI_SPEC.md` — 检查界面是否符合设计约束。
+
+## AI Collaboration Hardening
+
+Review as a gate, not a style pass:
+
+1. Run or consult `ai-pm-dev review-route --paths "<changed files>"`; use routed docs/checks as review scope.
+2. Lead with findings ordered by severity; include file/line, impact, and concrete fix.
+3. Check intent vs implementation against `docs/scope.md`, `docs/acceptance-tests.md`, PR template, and decision records.
+4. Treat AI-generated or agent-assisted changes as requiring evidence: tests, manual flow, or reproducible reasoning.
+5. Prioritize data integrity, permissions, auth, secrets, transactions, migrations, unsafe deletes, and rollback risk.
+6. Check docs update obligations: decision logs, troubleshooting, ownership, release notes, and acceptance tests should move with the code.
+7. If no findings, still state test gaps/residual risk.

@@ -31,14 +31,22 @@ Usage:
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
+  ai-pm-dev decision-record "<title>" [--why <reason>] [--goals <goals>] [--non-goals <non-goals>] [--test <plan>] [--rollback <plan>] [--target <path>]
+  ai-pm-dev bug "<title>" --actual <text> --expected <text> --repro <steps> --impact <scope> --verify <plan> [--env <info>] [--target <path>]
   ai-pm-dev note "<progress note>" [--target <path>]
   ai-pm-dev pitfall "<symptom>" [--cause <c>] [--fix <f>] [--target <path>]
   ai-pm-dev keyword "<term>" --explain "<plain words>" [--example <e>] [--target <path>]
   ai-pm-dev learned "<understanding in your own words>" [--target <path>]
   ai-pm-dev ask "<question>" [--why <reason>] [--target <path>]
   ai-pm-dev brief [--target <path>]
+  ai-pm-dev dashboard [--target <path>]
   ai-pm-dev checkpoint "<phase>" [--note <note>] [--target <path>]
   ai-pm-dev timeline [--target <path>]
+  ai-pm-dev install-ownership [--target <path>] [--force]
+  ai-pm-dev review-route [--target <path>] [--paths <path1,path2>]
+  ai-pm-dev skill lint [--target <path>] [--strict]
+  ai-pm-dev workflow check [--target <path>] [--strict]
+  ai-pm-dev install-pr-template [--target <path>] [--force]
   ai-pm-dev install-hook [--target <path>]
   ai-pm-dev uninstall-hook [--target <path>]
   ai-pm-dev status [--target <path>]
@@ -54,14 +62,22 @@ Commands:
   prd            Run an interactive PM interview and generate AI-PRD assets.
   start          Route a task, generate the AI prompt, and optionally save task state.
   decide         Append a one-line decision to docs/decision-log.md.
+  decision-record Write a KEP-lite decision record for a larger change.
+  bug            Write a structured bug report with repro, impact, and verification.
   note           Append a one-line progress note to docs/progress.md.
   pitfall        Append a one-line pitfall to docs/troubleshooting.md.
   keyword        Append a key-term card to docs/keywords.md.
   learned        Append an own-words understanding note to docs/learning-log.md.
   ask            Append a clarifying question to docs/open-questions.md.
   brief          Print a paste-ready context digest to resume in a fresh AI session.
+  dashboard      Write a read-only HTML project status dashboard.
   checkpoint     Record a session lifecycle checkpoint (idea/prd/build/verify/release).
   timeline       Show the recorded session checkpoints.
+  install-ownership Install local ownership/review routing rules.
+  review-route   Route changed paths to docs, checks, and reviewer skill lenses.
+  skill lint      Check development skills for AI collaboration guardrails.
+  workflow check  Check skill workflow guardrails; --strict exits non-zero on gaps.
+  install-pr-template Install a GitHub PR template that gates PRs against PRD/scope/tests.
   install-hook   Install a git pre-commit gate: block commits that skip docs/ updates.
   uninstall-hook Remove the ai-pm-dev pre-commit gate.
   status         Show the saved task state for a target project.
@@ -251,6 +267,394 @@ function runUninstallHook(args) {
   return `Removed ai-pm-dev pre-commit gate from ${hookPath}\n`;
 }
 
+const PR_TEMPLATE_MARKER = 'AI PM Dev Agent PR template gate';
+
+function prTemplateContent() {
+  return `<!-- ${PR_TEMPLATE_MARKER}: installed by ai-pm-dev install-pr-template -->
+
+# PR Gate
+
+## Summary
+
+What changed, and why is this the smallest useful change?
+
+## PRD / Scope Link
+
+- Latest PRD session: \`.ai-pm-dev/prd-sessions/<session>\`
+- Related docs: \`docs/scope.md\`, \`docs/acceptance-tests.md\`
+- Must-have this PR implements:
+- Non-goal check: this PR does not implement or expand into:
+
+## Gate Checklist
+
+- [ ] I ran \`ai-pm-dev prd check --strict\`.
+- [ ] The change maps to a must-have in \`docs/scope.md\`.
+- [ ] The change does not sneak in a listed non-goal.
+- [ ] \`docs/acceptance-tests.md\` covers the behavior changed here.
+- [ ] I updated project docs with \`ai-pm-dev decide\`, \`note\`, \`pitfall\`, or direct docs edits where needed.
+
+## How Did You Test This Change?
+
+List the exact commands, checks, screenshots, or manual flows used.
+
+## Reviewer Notes
+
+Call out risky areas, permissions/data changes, migrations, or places where you want extra scrutiny.
+
+## User-Facing Change
+
+\`\`\`release-note
+NONE
+\`\`\`
+
+## Additional Documentation
+
+\`\`\`docs
+NONE
+\`\`\`
+`;
+}
+
+function runInstallPrTemplate(args) {
+  const target = resolve(parseTarget(args));
+  const force = args.includes('--force');
+  const templatePath = join(target, '.github', 'PULL_REQUEST_TEMPLATE.md');
+
+  if (existsSync(templatePath)) {
+    const current = readFileSync(templatePath, 'utf8');
+    if (!current.includes(PR_TEMPLATE_MARKER) && !force) {
+      throw new Error(`A GitHub PR template already exists and was not created by ai-pm-dev:\n  ${templatePath}\nRe-run with --force to replace it intentionally.`);
+    }
+  }
+
+  mkdirSync(dirname(templatePath), { recursive: true });
+  writeFileSync(templatePath, prTemplateContent(), 'utf8');
+  return `Installed GitHub PR template gate -> ${templatePath}
+
+It asks every PR to name the PRD session, mapped must-have, non-goal boundary, docs updates, and test evidence.
+`;
+}
+
+const OWNERSHIP_MARKER = 'AI PM Dev Agent ownership routing';
+const ownershipRules = [
+  {
+    id: 'product-scope',
+    name: 'Product scope / PRD boundary',
+    patterns: ['docs/PROJECT_BRIEF.md', 'docs/scope.md', '.ai-pm-dev/prd-sessions/*/ai-prd.md', '.ai-pm-dev/prd-sessions/*/scope.md'],
+    owner: 'prd-generator / product-spec-builder',
+    review: 'Product boundary review: must-have, one thing, non-goals, metric.',
+    docs: ['docs/PROJECT_BRIEF.md', 'docs/scope.md', 'docs/open-questions.md'],
+    checks: ['ai-pm-dev prd check --strict', 'ai-pm-dev dashboard'],
+  },
+  {
+    id: 'acceptance-gate',
+    name: 'Acceptance and quality gate',
+    patterns: ['docs/acceptance-tests.md', '.ai-pm-dev/prd-sessions/*/acceptance-tests.md', '.ai-pm-dev/prd-sessions/*/quality-report.md'],
+    owner: 'prd-generator / code-review',
+    review: 'Verification review: acceptance criteria, testability, drift from scope.',
+    docs: ['docs/acceptance-tests.md', 'docs/scope.md'],
+    checks: ['ai-pm-dev prd check --strict', 'npm test'],
+  },
+  {
+    id: 'cli-runtime',
+    name: 'CLI/runtime behavior',
+    patterns: ['bin/*', 'scripts/*', 'package.json'],
+    owner: 'dev-builder / code-review',
+    review: 'CLI behavior review: command UX, path safety, Windows compatibility, no unwanted overwrites.',
+    docs: ['README.md', 'CHANGELOG.md', 'docs/progress.md'],
+    checks: ['node --check bin/ai-pm-dev.mjs', 'npm test'],
+  },
+  {
+    id: 'workflow-rules',
+    name: 'Workflow rules and skills',
+    patterns: ['skills/*/SKILL.md', 'templates/*', 'operating-layer/*', 'operating-layer/docs/*'],
+    owner: 'dev-planner / code-review',
+    review: 'Operating-layer review: does the rule reduce drift without adding workflow bloat?',
+    docs: ['AGENTS.md', 'docs/decision-log.md'],
+    checks: ['npm test', 'ai-pm-dev doctor'],
+  },
+  {
+    id: 'decision-memory',
+    name: 'Decision and learning memory',
+    patterns: ['docs/decision-log.md', 'docs/decision-records/*', 'docs/progress.md', 'docs/troubleshooting.md', 'docs/open-questions.md'],
+    owner: 'all skills',
+    review: 'Traceability review: decision, why, risk, and follow-up remain discoverable.',
+    docs: ['docs/decision-log.md', 'docs/open-questions.md', 'docs/progress.md'],
+    checks: ['ai-pm-dev dashboard', 'ai-pm-dev doctor'],
+  },
+  {
+    id: 'github-gates',
+    name: 'GitHub / local gates',
+    patterns: ['.github/*', '.github/PULL_REQUEST_TEMPLATE.md', '.git/hooks/*'],
+    owner: 'release-builder / code-review',
+    review: 'Gate review: make sure the template/hook asks for PRD, scope, tests, and docs without blocking normal work unfairly.',
+    docs: ['README.md', 'CHANGELOG.md'],
+    checks: ['npm test'],
+  },
+];
+
+function ownershipJson() {
+  return `${JSON.stringify({
+    generatedBy: OWNERSHIP_MARKER,
+    rules: ownershipRules,
+  }, null, 2)}\n`;
+}
+
+function ownershipMarkdown() {
+  const rows = ownershipRules.map((rule) => `| ${rule.name} | \`${rule.patterns.join('`, `')}\` | ${rule.owner} | ${rule.checks.map((check) => `\`${check}\``).join('<br>')} |`).join('\n');
+  return `# Ownership and Review Routing
+
+<!-- ${OWNERSHIP_MARKER}: installed by ai-pm-dev install-ownership -->
+
+Use this as a local OWNERS map. It does not assign people; it routes changes to the right
+skill lens, docs, and gates so the project does not drift from its PRD.
+
+| Area | Paths | Owner / skill lens | Required checks |
+| --- | --- | --- | --- |
+${rows}
+
+## How to use
+
+Run:
+
+\`\`\`bash
+ai-pm-dev review-route --paths "docs/scope.md,bin/ai-pm-dev.mjs"
+\`\`\`
+
+Before implementation, read the routed docs. Before review, run the routed checks and paste
+the output or evidence into the PR template.
+`;
+}
+
+function protectGeneratedFile(path, marker, force, description) {
+  if (!existsSync(path)) {
+    return;
+  }
+  const current = readFileSync(path, 'utf8');
+  if (!current.includes(marker) && !force) {
+    throw new Error(`${description} already exists and was not created by ai-pm-dev:\n  ${path}\nRe-run with --force to replace it intentionally.`);
+  }
+}
+
+function runInstallOwnership(args) {
+  const target = resolve(parseTarget(args));
+  const force = args.includes('--force');
+  const mdPath = join(target, 'docs', 'ownership.md');
+  const jsonPath = join(target, '.ai-pm-dev', 'owners.json');
+
+  protectGeneratedFile(mdPath, OWNERSHIP_MARKER, force, 'Ownership doc');
+  protectGeneratedFile(jsonPath, OWNERSHIP_MARKER, force, 'Owners routing file');
+
+  mkdirSync(dirname(mdPath), { recursive: true });
+  mkdirSync(dirname(jsonPath), { recursive: true });
+  writeFileSync(mdPath, ownershipMarkdown(), 'utf8');
+  writeFileSync(jsonPath, ownershipJson(), 'utf8');
+
+  return `Installed ownership routing -> ${mdPath}
+Installed machine-readable routes -> ${jsonPath}
+
+Use: ai-pm-dev review-route --paths "docs/scope.md,bin/ai-pm-dev.mjs" --target "${target}"
+`;
+}
+
+function normalizeRoutePath(value) {
+  return (value || '').replace(/\\/g, '/').replace(/^\.\//, '').trim();
+}
+
+function patternToRegex(pattern) {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const globstar = '__AI_PM_DEV_GLOBSTAR__';
+  return new RegExp(`^${escaped.replace(/\*\*/g, globstar).replace(/\*/g, '[^/]*').replaceAll(globstar, '.*')}$`);
+}
+
+function ruleMatchesPath(rule, path) {
+  const normalized = normalizeRoutePath(path);
+  return rule.patterns.some((pattern) => patternToRegex(pattern).test(normalized));
+}
+
+function parseRoutePaths(args, target) {
+  const explicit = parseValue(args, '--paths');
+  if (explicit) {
+    return explicit.split(/[,;\n]+/).map(normalizeRoutePath).filter(Boolean);
+  }
+  try {
+    const unstaged = execFileSync('git', ['-C', target, 'diff', '--name-only'], { encoding: 'utf8' });
+    const staged = execFileSync('git', ['-C', target, 'diff', '--cached', '--name-only'], { encoding: 'utf8' });
+    return [...new Set(`${unstaged}\n${staged}`.split(/\r?\n/).map(normalizeRoutePath).filter(Boolean))];
+  } catch {
+    throw new Error('Usage: ai-pm-dev review-route [--target <path>] --paths "docs/scope.md,bin/ai-pm-dev.mjs"');
+  }
+}
+
+function runReviewRoute(args) {
+  const target = resolve(parseTarget(args));
+  const paths = parseRoutePaths(args, target);
+  if (!paths.length) {
+    return `Review Route\n\nNo changed paths found. Pass --paths "path1,path2" or run inside a git repo with changes.\n`;
+  }
+
+  const matched = [];
+  for (const rule of ownershipRules) {
+    const changed = paths.filter((path) => ruleMatchesPath(rule, path));
+    if (changed.length) {
+      matched.push({ rule, changed });
+    }
+  }
+
+  if (!matched.length) {
+    return `Review Route
+
+Paths:
+${paths.map((path) => `- ${path}`).join('\n')}
+
+No ownership route matched. Use code-review and update docs/progress.md with what changed.
+`;
+  }
+
+  const blocks = matched.map(({ rule, changed }) => `## ${rule.name}
+
+Changed paths:
+${changed.map((path) => `- ${path}`).join('\n')}
+
+Owner / skill lens: ${rule.owner}
+Review focus: ${rule.review}
+
+Docs to read:
+${rule.docs.map((doc) => `- ${doc}`).join('\n')}
+
+Checks:
+${rule.checks.map((check) => `- ${check}`).join('\n')}`).join('\n\n');
+
+  return `Review Route
+
+Target: ${target}
+
+${blocks}
+`;
+}
+
+const workflowSkillNames = [
+  'dev-planner',
+  'dev-builder',
+  'bug-fixer',
+  'code-review',
+  'release-builder',
+];
+
+const workflowGuardrailChecks = [
+  {
+    id: 'context',
+    label: 'Context is explicit before action',
+    patterns: [/context/i, /review-route/i, /docs\/scope\.md/i, /actual\/expected\/repro/i],
+    hint: 'Add a context-pack, review-route, repro, or docs-to-read instruction.',
+  },
+  {
+    id: 'verification',
+    label: 'Verification evidence is required',
+    patterns: [/verification/i, /verify/i, /test/i, /evidence/i, /prd check --strict/i],
+    hint: 'Name the command, manual flow, evidence, or strict gate that proves the work.',
+  },
+  {
+    id: 'risk-boundary',
+    label: 'Risk boundaries require confirmation',
+    patterns: [/risk/i, /boundary/i, /security/i, /permission/i, /destructive/i, /data-loss/i, /auth/i, /secrets/i],
+    hint: 'Call out security, permission, destructive, data, auth, or other human-owned boundaries.',
+  },
+  {
+    id: 'docs-update',
+    label: 'Docs/memory updates are required',
+    patterns: [/docs update/i, /update docs/i, /documentation/i, /decision-record/i, /pitfall/i, /release-checklist/i, /local-run-guide/i, /demo-script/i],
+    hint: 'Require the relevant docs, decision, pitfall, release, or troubleshooting record to move with the work.',
+  },
+  {
+    id: 'rollback',
+    label: 'Rollback path is named for risky work',
+    patterns: [/rollback/i],
+    hint: 'Add rollback guidance for risky changes, releases, migrations, data, or config edits.',
+  },
+];
+
+function listWorkflowSkillPaths(target) {
+  const skillsDir = join(target, 'skills');
+  return workflowSkillNames.map((name) => ({
+    name,
+    path: join(skillsDir, name, 'SKILL.md'),
+  }));
+}
+
+function evaluateWorkflowSkill(skillPath) {
+  if (!existsSync(skillPath)) {
+    return {
+      exists: false,
+      checks: workflowGuardrailChecks.map((check) => ({ ...check, pass: false })),
+    };
+  }
+  const body = readFileSync(skillPath, 'utf8');
+  return {
+    exists: true,
+    checks: workflowGuardrailChecks.map((check) => ({
+      ...check,
+      pass: check.patterns.some((pattern) => pattern.test(body)),
+    })),
+  };
+}
+
+function runWorkflowCheck(args, title = 'Workflow Check') {
+  const target = resolve(parseTarget(args));
+  const strict = args.includes('--strict');
+  const skills = listWorkflowSkillPaths(target);
+  const results = skills.map((skill) => ({
+    ...skill,
+    result: evaluateWorkflowSkill(skill.path),
+  }));
+
+  const totalChecks = results.reduce((sum, item) => sum + item.result.checks.length, 0);
+  const passedChecks = results.reduce((sum, item) => sum + item.result.checks.filter((check) => check.pass).length, 0);
+  const missingSkills = results.filter((item) => !item.result.exists);
+  const failedChecks = results.flatMap((item) => item.result.checks
+    .filter((check) => !check.pass)
+    .map((check) => ({ skill: item.name, path: item.path, check })));
+  const overall = failedChecks.length || missingSkills.length ? 'FAIL' : 'PASS';
+
+  if (strict && overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  const skillBlocks = results.map((item) => {
+    if (!item.result.exists) {
+      return `FAIL ${item.name}
+  missing: ${item.path}`;
+    }
+    const lines = item.result.checks.map((check) => `  ${check.pass ? 'PASS' : 'FAIL'} ${check.id}: ${check.label}${check.pass ? '' : ` (${check.hint})`}`);
+    return `${item.result.checks.every((check) => check.pass) ? 'PASS' : 'FAIL'} ${item.name}
+${lines.join('\n')}`;
+  }).join('\n\n');
+
+  return `${title}${strict ? ' (strict)' : ''}
+
+Target: ${target}
+Overall: ${overall} (${passedChecks}/${totalChecks} guardrail checks passed)
+
+${skillBlocks}
+${strict && overall === 'FAIL' ? '\nStrict mode: exiting non-zero because workflow guardrails are missing.\n' : '\n'}`;
+}
+
+function runSkill(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'lint') {
+    return runWorkflowCheck(rest, 'Skill Lint');
+  }
+  throw new Error('Usage: ai-pm-dev skill lint [--target <path>] [--strict]');
+}
+
+function runWorkflow(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'check') {
+    return runWorkflowCheck(rest, 'Workflow Check');
+  }
+  throw new Error('Usage: ai-pm-dev workflow check [--target <path>] [--strict]');
+}
+
 function runStatus(args) {
   const target = resolve(parseTarget(args));
   const statePath = join(target, '.ai-pm-dev', 'state.json');
@@ -428,8 +832,8 @@ const prdQuestions = [
   {
     key: 'mvpScope',
     label: 'MVP must-haves',
-    prompt: 'List the v1 must-haves — at most 3. More than 3 means you have not prioritized.',
-    promptZh: '列出 v1 的必做项 —— 最多 3 个。超过 3 个就是还没定优先级。',
+    prompt: 'List the v1 must-haves — at most 3, separated by semicolons (a comma stays inside one item). More than 3 means you have not prioritized.',
+    promptZh: '列出 v1 的必做项 —— 最多 3 个，用分号分隔（逗号算同一条内部）。超过 3 个就是还没定优先级。',
   },
   {
     key: 'oneThing',
@@ -484,12 +888,26 @@ const prdQuestions = [
   },
 ];
 
-// Count list items in a free-text answer (comma / Chinese comma / semicolon / newline separated).
+// Split a free-text answer into items. When the user used explicit separators
+// (new lines or semicolons), commas are treated as part of an item — so a single
+// must-have like "track weight, steps, and sleep" is not miscounted as three.
+// With no explicit separator, fall back to comma-splitting so a one-line
+// "A, B, C" answer still yields three items.
+function splitItems(value) {
+  const raw = (value || '').trim();
+  if (!raw) {
+    return [];
+  }
+  const separator = /[\n;；]/.test(raw) ? /[\n;；]+/ : /[,，;；\n]+/;
+  return raw.split(separator).map((item) => item.trim()).filter(Boolean);
+}
+
 function countItems(value) {
-  return (value || '')
-    .split(/[,，;；\n]+/)
-    .map((item) => item.trim())
-    .filter(Boolean).length;
+  return splitItems(value).length;
+}
+
+function listItems(value) {
+  return splitItems(value);
 }
 
 const projectTypes = ['ai-tool', 'saas', 'consumer', 'internal-tool', 'general'];
@@ -564,13 +982,14 @@ function buildCodexHandoff(answers) {
 
 Build the first implementation slice for: ${answers.idea}
 
-Read \`ai-prd.md\` first and treat it as the product source of truth.
+Read \`ai-prd.md\`, \`scope.md\`, and \`acceptance-tests.md\` first. Treat them as the product source of truth and do not expand v1 beyond them.
 
 ## Product Context
 
 - Target users: ${answers.targetUsers}
 - Core workflow: ${answers.coreWorkflow}
 - MVP scope: ${answers.mvpScope}
+- Non-goals: ${answers.nonGoals}
 
 ## Engineering Requirements
 
@@ -592,9 +1011,13 @@ function buildV0Handoff(answers) {
 
 Create a polished interactive prototype for: ${answers.idea}
 
+Read \`ai-prd.md\`, \`scope.md\`, and \`acceptance-tests.md\` first. Prototype only the declared v1 slice.
+
 Audience: ${answers.targetUsers}
 Problem: ${answers.painPoints}
 Workflow: ${answers.coreWorkflow}
+MVP scope: ${answers.mvpScope}
+Non-goals: ${answers.nonGoals}
 
 Use realistic mock data for: ${answers.dataModel}
 Show deterministic calculations for: ${answers.deterministicRules}
@@ -610,6 +1033,8 @@ function buildFigmaHandoff(answers) {
 
 Design an editable product prototype for: ${answers.idea}
 
+Read \`ai-prd.md\`, \`scope.md\`, and \`acceptance-tests.md\` first. The design should make the acceptance path visible.
+
 ## User and Scenario
 
 - User: ${answers.targetUsers}
@@ -623,7 +1048,8 @@ ${answers.coreWorkflow}
 
 ## Product Constraints
 
-- MVP and non-goals: ${answers.mvpScope}
+- MVP scope: ${answers.mvpScope}
+- Non-goals: ${answers.nonGoals}
 - Data shown in UI: ${answers.dataModel}
 - Deterministic state/metrics: ${answers.deterministicRules}
 - AI boundary: ${answers.aiBoundaries}
@@ -665,6 +1091,108 @@ ${answers.acceptanceCriteria}
 `;
 }
 
+function answerText(answers, key) {
+  return (answers[key] || '').trim();
+}
+
+function answerIsThin(answers, key, minLength = 18) {
+  const text = answerText(answers, key);
+  return text.length > 0 && text.length < minLength;
+}
+
+function questionByKey(key) {
+  return prdQuestions.find((question) => question.key === key);
+}
+
+function followUpItem(key, question, why) {
+  return {
+    key,
+    label: questionByKey(key)?.label || key,
+    question,
+    why,
+  };
+}
+
+function buildAdaptiveFollowUps(answers, activeQuestions = prdQuestions) {
+  const activeKeys = new Set(activeQuestions.map((question) => question.key));
+  const has = (key) => activeKeys.has(key) && answerText(answers, key).length > 0;
+  const missing = (key) => activeKeys.has(key) && !has(key);
+  const items = [];
+  const add = (key, question, why) => {
+    if (activeKeys.has(key) && !items.some((item) => item.key === key && item.question === question)) {
+      items.push(followUpItem(key, question, why));
+    }
+  };
+
+  if (missing('targetUsers') || answerIsThin(answers, 'targetUsers')) {
+    add('targetUsers', 'Who is the first narrow user segment, and what makes them more urgent than adjacent users?', 'A broad audience makes scope and UX choices mushy.');
+  }
+  if (missing('painPoints') || answerIsThin(answers, 'painPoints')) {
+    add('painPoints', 'What exact moment hurts enough that this user would try a new tool now?', 'The PRD needs a sharp use case, not just a category problem.');
+  }
+  if (missing('currentWorkaround')) {
+    add('currentWorkaround', 'How do users solve this today, and what is frustrating or expensive about that workaround?', 'The workaround reveals switching cost and what v1 must beat.');
+  }
+  if (missing('coreWorkflow') || answerIsThin(answers, 'coreWorkflow')) {
+    add('coreWorkflow', 'Write the entry-to-value path in 3-5 steps: user starts where, does what, and gets what result?', 'Downstream design and implementation need a concrete flow.');
+  }
+  if (missing('mvpScope')) {
+    add('mvpScope', 'List exactly 1-3 v1 must-haves. What gets deferred even if it sounds useful?', 'The project needs a small enough build slice to protect momentum.');
+  } else if (countItems(answerText(answers, 'mvpScope')) > 3) {
+    add('mvpScope', 'Cut the v1 must-haves to 3 or fewer. Which items move to later, and why?', 'More than 3 must-haves means prioritization has not happened yet.');
+  }
+  if (missing('oneThing')) {
+    add('oneThing', 'If only one feature shipped this week, which one would prove the product idea?', 'The one thing prevents a grab bag MVP.');
+  }
+  if (missing('nonGoals')) {
+    add('nonGoals', 'Name at least one attractive thing v1 will deliberately not do, and why it is out.', 'A real non-goal is the clearest proof that scope was cut.');
+  }
+  if (missing('dataModel')) {
+    add('dataModel', 'What data must be created, stored, imported, or displayed for the core workflow to work?', 'Data boundaries shape screens, tests, and engineering slices.');
+  }
+  if (missing('deterministicRules')) {
+    add('deterministicRules', 'Which calculations, permissions, statuses, or rankings must be deterministic instead of AI-generated?', 'Deterministic rules keep product state inspectable.');
+  }
+  if (missing('aiBoundaries')) {
+    add('aiBoundaries', 'What may AI suggest or summarize, and what must it never decide by itself?', 'AI boundaries reduce hallucination and product safety risk.');
+  }
+  if (missing('trustMechanism')) {
+    add('trustMechanism', 'What evidence, source records, or state should appear beside AI output so users can verify it?', 'Trust requires inspectable evidence, not just confident prose.');
+  }
+  if (missing('risks')) {
+    add('risks', 'What privacy, permission, safety, or misleading-output risk could make v1 unacceptable?', 'Risks should become guardrails before implementation starts.');
+  }
+
+  const metric = answerText(answers, 'acceptanceCriteria');
+  const metricLooksVague = metric && !/\d|%|minute|min|second|sec|within|less than|at least|complete|finish/i.test(metric);
+  if (missing('acceptanceCriteria')) {
+    add('acceptanceCriteria', 'What single measurable signal proves v1 worked: one number, threshold, or observable result?', 'A primary metric turns the PRD into a gate instead of a wish.');
+  } else if (metricLooksVague) {
+    add('acceptanceCriteria', 'Make the success metric measurable: what exact number, threshold, or observable result should pass?', 'Vague success criteria are hard to test or review.');
+  }
+
+  return items.slice(0, 8);
+}
+
+function buildFollowUpQuestionsDoc(answers, followUps) {
+  const rows = followUps.length
+    ? followUps.map((item, index) => `${index + 1}. **${item.label}**\n   - Question: ${item.question}\n   - Why: ${item.why}`).join('\n\n')
+    : 'No major gaps detected by the local analyzer. Run `ai-pm-dev prd check --strict` for the gate.';
+
+  return `# Adaptive Follow-up Questions: ${answers.idea || 'Untitled'}
+
+Generated locally by \`ai-pm-dev prd\`. No LLM API was called.
+
+Use these questions for the next PM pass before handing work to an implementation tool.
+
+${rows}
+
+## Paste-ready PM Challenge
+
+Read \`ai-prd.md\`, \`scope.md\`, and the questions above. Ask only the unanswered questions that matter for v1. Force these decisions before implementation: cut must-haves to 3, choose the one thing, name at least one non-goal, and define one measurable success signal.
+`;
+}
+
 function buildConversation(answers) {
   return `# PRD Interview Conversation
 
@@ -693,10 +1221,7 @@ ${section('Data the product records or generates', answers.dataModel)}`;
 }
 
 function buildScopeDoc(answers) {
-  const items = (answers.mvpScope || '')
-    .split(/[,，;；\n]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const items = splitItems(answers.mvpScope);
   const kept = items.slice(0, 3);
   const cut = items.slice(3);
   return `# Scope: ${answers.idea}
@@ -808,6 +1333,183 @@ function runDecide(args) {
   const path = join(target, 'docs', 'decision-log.md');
   appendRows(path, DECISION_HEADER, [`| ${todayStamp()} | ${cell(message)} | ${cell(why) || '-'} | you |`]);
   return `Logged decision -> ${path}\n`;
+}
+
+function decisionRecordContent(title, options) {
+  const value = (key, fallback) => clean(options[key]) || fallback;
+  return `# Decision Record: ${title}
+
+Status: proposed
+Date: ${todayStamp()}
+
+## Summary
+
+${value('why', 'What decision are we making, and why now?')}
+
+## PRD / Scope Link
+
+- Latest PRD session: \`.ai-pm-dev/prd-sessions/<session>\`
+- Scope source: \`docs/scope.md\`
+- Acceptance source: \`docs/acceptance-tests.md\`
+
+## Goals
+
+${value('goals', '- What this change must achieve.')}
+
+## Non-Goals
+
+${value('nonGoals', '- What this change will deliberately not do.')}
+
+## Proposal
+
+Describe the chosen approach, key files/components, and why this is the smallest useful path.
+
+## Risks and Mitigations
+
+- Risk:
+- Mitigation:
+
+## Test Plan
+
+${value('test', '- Commands, checks, screenshots, or manual flows that prove this works.')}
+
+## Rollback Plan
+
+${value('rollback', '- How to disable, revert, or safely back out this change.')}
+
+## Readiness Checklist
+
+- [ ] Goals are tied to a must-have in \`docs/scope.md\`.
+- [ ] Non-goals are explicit enough to stop scope expansion.
+- [ ] Acceptance tests or review checks cover the behavior.
+- [ ] Rollback is understandable before implementation starts.
+- [ ] Docs updates are known.
+
+## Alternatives Considered
+
+- Alternative:
+- Why not:
+`;
+}
+
+function runDecisionRecord(args) {
+  const title = appendMessage(args, 'Usage: ai-pm-dev decision-record "<title>" [--why <reason>] [--goals <goals>] [--non-goals <non-goals>] [--test <plan>] [--rollback <plan>] [--target <path>]');
+  const target = resolve(parseTarget(args));
+  const recordsDir = join(target, 'docs', 'decision-records');
+  const fileName = `${todayStamp()}-${slugify(title)}.md`;
+  const path = join(recordsDir, fileName);
+  const options = {
+    why: parseValue(args, '--why'),
+    goals: parseValue(args, '--goals'),
+    nonGoals: parseValue(args, '--non-goals'),
+    test: parseValue(args, '--test'),
+    rollback: parseValue(args, '--rollback'),
+  };
+
+  mkdirSync(recordsDir, { recursive: true });
+  writeFileSync(path, decisionRecordContent(title, options), 'utf8');
+  appendRows(
+    join(target, 'docs', 'decision-log.md'),
+    DECISION_HEADER,
+    [`| ${todayStamp()} | Decision record: ${cell(title)} | ${cell(options.why) || `See ${cell(join('docs', 'decision-records', fileName))}`} | you |`],
+  );
+
+  return `Wrote decision record -> ${path}
+Review goals, non-goals, test plan, and rollback before implementation starts.
+`;
+}
+
+function requireFlag(args, flag, usage) {
+  const value = parseValue(args, flag);
+  if (!value || value.startsWith('--')) {
+    throw new Error(usage);
+  }
+  return value;
+}
+
+function defaultBugEnv() {
+  return [
+    `Node: ${process.version}`,
+    `Platform: ${process.platform}`,
+    `cwd: ${process.cwd()}`,
+  ].join('\n');
+}
+
+function bugReportContent(title, options) {
+  return `# Bug Report: ${title}
+
+Status: open
+Date: ${todayStamp()}
+
+## Actual Behavior
+
+${clean(options.actual)}
+
+## Expected Behavior
+
+${clean(options.expected)}
+
+## Minimal Reproduction
+
+${clean(options.repro)}
+
+## Impact / Affected Area
+
+${clean(options.impact)}
+
+## Environment
+
+\`\`\`text
+${clean(options.env) || defaultBugEnv()}
+\`\`\`
+
+## Verification Plan
+
+${clean(options.verify)}
+
+## Investigation Notes
+
+- Suspected layer:
+- First failing version / change:
+- Logs, screenshots, or links:
+
+## Fix Checklist
+
+- [ ] Reproduced with the minimal steps above.
+- [ ] Fix stays inside current \`docs/scope.md\`.
+- [ ] Added or updated a regression check.
+- [ ] Ran the verification plan.
+- [ ] Recorded any decision, pitfall, or follow-up question.
+`;
+}
+
+function runBug(args) {
+  const usage = 'Usage: ai-pm-dev bug "<title>" --actual <text> --expected <text> --repro <steps> --impact <scope> --verify <plan> [--env <info>] [--target <path>]';
+  const title = appendMessage(args, usage);
+  const target = resolve(parseTarget(args));
+  const options = {
+    actual: requireFlag(args, '--actual', usage),
+    expected: requireFlag(args, '--expected', usage),
+    repro: requireFlag(args, '--repro', usage),
+    impact: requireFlag(args, '--impact', usage),
+    verify: requireFlag(args, '--verify', usage),
+    env: parseValue(args, '--env'),
+  };
+  const bugsDir = join(target, 'docs', 'bugs');
+  const fileName = `${todayStamp()}-${slugify(title)}.md`;
+  const path = join(bugsDir, fileName);
+
+  mkdirSync(bugsDir, { recursive: true });
+  writeFileSync(path, bugReportContent(title, options), 'utf8');
+  appendRows(
+    join(target, 'docs', 'troubleshooting.md'),
+    TROUBLE_HEADER,
+    [`| ${cell(title)} | Open bug report: ${cell(join('docs', 'bugs', fileName))} | ${cell(options.verify)} | - |`],
+  );
+
+  return `Wrote bug report -> ${path}
+Reproduce before fixing; verify with: ${clean(options.verify)}
+`;
 }
 
 function runPitfall(args) {
@@ -996,7 +1698,160 @@ ai-pm-dev decide/note/pitfall/ask (never a separate CHANGELOG). Verify with prd 
 `;
 }
 
-function writeProjectDocs(targetRoot, answers) {
+function escapeHtml(value) {
+  return (value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function htmlList(items, emptyText) {
+  if (!items.length) {
+    return `<p class="muted">${escapeHtml(emptyText)}</p>`;
+  }
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function checkClass(status) {
+  if (status === 'PASS') return 'pass';
+  if (status === 'WARN') return 'warn';
+  return 'fail';
+}
+
+function dashboardDocRows(target) {
+  const coreDocs = [
+    'PROJECT_BRIEF.md',
+    'UI_SPEC.md',
+    'acceptance-tests.md',
+    'scope.md',
+    'decision-log.md',
+    'open-questions.md',
+    'progress.md',
+    'troubleshooting.md',
+  ];
+  return coreDocs.map((doc) => {
+    const path = join(target, 'docs', doc);
+    const status = !existsSync(path) ? 'missing' : (docIsStub(path) ? 'stub' : 'filled');
+    const klass = status === 'filled' ? 'pass' : (status === 'stub' ? 'warn' : 'fail');
+    return `<tr><td>${escapeHtml(doc)}</td><td><span class="${klass}">${status}</span></td></tr>`;
+  }).join('');
+}
+
+function buildDashboardHtml(target) {
+  const sessionPath = latestPrdSession(target);
+  const statePath = join(target, '.ai-pm-dev', 'state.json');
+  const answers = sessionPath && existsSync(join(sessionPath, 'answers.json'))
+    ? JSON.parse(readFileSync(join(sessionPath, 'answers.json'), 'utf8'))
+    : {};
+  const checks = sessionPath ? evaluatePrd(answers, sessionPath) : [];
+  const score = checks.length ? scoreChecks(checks) : { overall: 'WARN', requiredPass: 0, requiredTotal: 0, recommendedPass: 0, recommendedTotal: 0 };
+  const visibleChecks = checks.filter((check) => !check.pass).slice(0, 8);
+  const openQuestions = recentTableRows(join(target, 'docs', 'open-questions.md'), 8).map((row) => tableCells(row)[0]);
+  const decisions = recentTableRows(join(target, 'docs', 'decision-log.md'), 5).map((row) => {
+    const cells = tableCells(row);
+    return `${cells[0]} - ${cells[1]}${cells[2] && cells[2] !== '-' ? ` (${cells[2]})` : ''}`;
+  });
+  const timeline = readTimeline(target).slice(-8).map((item) => `${item.at.slice(0, 16).replace('T', ' ')} - ${item.phase}${item.note ? `: ${item.note}` : ''}`);
+  const nextStep = existsSync(statePath) ? (JSON.parse(readFileSync(statePath, 'utf8')).nextStep || '') : '';
+  const mustHaves = listItems(answers.mvpScope || '').slice(0, 3);
+  const checkRows = visibleChecks.length
+    ? visibleChecks.map((check) => {
+      const status = check.pass ? 'PASS' : (check.severity === 'required' ? 'FAIL' : 'WARN');
+      return `<tr><td><span class="${checkClass(status)}">${status}</span></td><td>${escapeHtml(check.name)}</td><td>${escapeHtml(check.hint || '')}</td></tr>`;
+    }).join('')
+    : '<tr><td><span class="pass">PASS</span></td><td>No blocking gate issues</td><td></td></tr>';
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI PM Dev Dashboard</title>
+  <style>
+    :root { color-scheme: light; --ink:#17202a; --muted:#617080; --line:#d9e0e7; --bg:#f7f9fb; --panel:#ffffff; --pass:#13795b; --warn:#9a6700; --fail:#b42318; }
+    body { margin:0; font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; color:var(--ink); background:var(--bg); }
+    header { padding:28px 32px 18px; background:var(--panel); border-bottom:1px solid var(--line); }
+    main { max-width:1160px; margin:0 auto; padding:24px; display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:16px; letter-spacing:0; }
+    p { margin:0 0 10px; }
+    ul { margin:0; padding-left:20px; }
+    table { width:100%; border-collapse:collapse; }
+    td, th { padding:8px 0; border-top:1px solid var(--line); text-align:left; vertical-align:top; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .wide { grid-column:span 8; }
+    .half { grid-column:span 6; }
+    .third { grid-column:span 4; }
+    .metric { display:flex; gap:10px; flex-wrap:wrap; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:4px 9px; background:#fff; }
+    .pass { color:var(--pass); font-weight:700; }
+    .warn { color:var(--warn); font-weight:700; }
+    .fail { color:var(--fail); font-weight:700; }
+    .muted { color:var(--muted); }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; }
+    @media (max-width: 760px) { main { grid-template-columns:1fr; padding:14px; } .wide,.half,.third { grid-column:auto; } header { padding:22px 18px 14px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="label">Read-only project state</p>
+    <h1>${escapeHtml(answers.idea || 'AI PM Dev Dashboard')}</h1>
+    <div class="metric">
+      <span class="pill">Gate: <span class="${checkClass(score.overall)}">${escapeHtml(score.overall)}</span></span>
+      <span class="pill">Required: ${score.requiredPass}/${score.requiredTotal}</span>
+      <span class="pill">Recommended: ${score.recommendedPass}/${score.recommendedTotal}</span>
+    </div>
+  </header>
+  <main>
+    <section class="card wide">
+      <h2>Scope</h2>
+      <p><strong>The one thing:</strong> ${escapeHtml(answers.oneThing || 'Not specified.')}</p>
+      <p><strong>Non-goals:</strong> ${escapeHtml(answers.nonGoals || 'Not specified.')}</p>
+      <p><strong>Primary metric:</strong> ${escapeHtml(answers.acceptanceCriteria || 'Not specified.')}</p>
+      <div>${htmlList(mustHaves, 'No must-haves recorded.')}</div>
+    </section>
+    <section class="card third">
+      <h2>Next</h2>
+      <p>${escapeHtml(nextStep || 'Run ai-pm-dev prd, then ai-pm-dev prd check --strict.')}</p>
+      <p class="muted">${escapeHtml(sessionPath || 'No PRD session yet.')}</p>
+    </section>
+    <section class="card half">
+      <h2>Gate Issues</h2>
+      <table><tbody>${checkRows}</tbody></table>
+    </section>
+    <section class="card half">
+      <h2>Docs</h2>
+      <table><tbody>${dashboardDocRows(target)}</tbody></table>
+    </section>
+    <section class="card third">
+      <h2>Open Questions</h2>
+      ${htmlList(openQuestions, 'No open questions recorded.')}
+    </section>
+    <section class="card third">
+      <h2>Recent Decisions</h2>
+      ${htmlList(decisions, 'No decisions recorded.')}
+    </section>
+    <section class="card third">
+      <h2>Timeline</h2>
+      ${htmlList(timeline, 'No checkpoints recorded.')}
+    </section>
+  </main>
+</body>
+</html>
+`;
+}
+
+function runDashboard(args) {
+  const target = resolve(parseTarget(args));
+  const outputPath = join(target, '.ai-pm-dev', 'dashboard.html');
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, buildDashboardHtml(target), 'utf8');
+  return `Dashboard written -> ${outputPath}\nOpen the HTML file in your browser to view the read-only project state.\n`;
+}
+
+function writeProjectDocs(targetRoot, answers, followUps = []) {
   const docsDir = join(targetRoot, 'docs');
   seedDoc(join(docsDir, 'PROJECT_BRIEF.md'), buildProjectBriefDoc(answers));
   seedDoc(join(docsDir, 'UI_SPEC.md'), buildUiSpecDoc(answers));
@@ -1015,7 +1870,9 @@ function writeProjectDocs(targetRoot, answers) {
   const blanks = prdQuestions
     .filter((question) => !(answers[question.key] || '').trim())
     .map((question) => `| ${question.label}: ${oneLine(question.prompt)} | Left blank in PRD interview | open |`);
-  appendRows(join(docsDir, 'open-questions.md'), OPEN_QUESTIONS_HEADER, blanks);
+  const adaptiveRows = followUps
+    .map((item) => `| ${cell(`${item.label}: ${item.question}`)} | ${cell(item.why)} | open |`);
+  appendRows(join(docsDir, 'open-questions.md'), OPEN_QUESTIONS_HEADER, [...blanks, ...adaptiveRows]);
 }
 
 function oneLine(value) {
@@ -1035,7 +1892,7 @@ function latestPrdSession(target) {
   return latest ? join(sessionsRoot, latest) : '';
 }
 
-function writePrdAssets(target, answers, sourceNote = '') {
+function writePrdAssets(target, answers, sourceNote = '', activeQuestions = prdQuestions) {
   if (!existsSync(target)) {
     throw new Error(`Target directory does not exist: ${target}`);
   }
@@ -1052,10 +1909,12 @@ function writePrdAssets(target, answers, sourceNote = '') {
   const stamp = formatStamp(nowForSession());
   const sessionName = `${stamp}-${sessionSlug(answers.idea)}`;
   const sessionPath = join(targetRoot, '.ai-pm-dev', 'prd-sessions', sessionName);
+  const followUps = buildAdaptiveFollowUps(answers, activeQuestions);
   const files = {
     'conversation.md': buildConversation(answers),
     'answers.json': `${JSON.stringify(answers, null, 2)}\n`,
     'ai-prd.md': buildAiPrd(answers),
+    'follow-up-questions.md': buildFollowUpQuestionsDoc(answers, followUps),
     'prototype-brief.md': buildPrototypeBrief(answers),
     'handoff-codex.md': buildCodexHandoff(answers),
     'handoff-v0.md': buildV0Handoff(answers),
@@ -1088,7 +1947,7 @@ function writePrdAssets(target, answers, sourceNote = '') {
     updatedAt: new Date().toISOString(),
   }, null, 2)}\n`, 'utf8');
 
-  writeProjectDocs(targetRoot, answers);
+  writeProjectDocs(targetRoot, answers, followUps);
   appendCheckpoint(targetRoot, 'prd', answers.idea);
 
   return { sessionPath, files };
@@ -1110,6 +1969,7 @@ AI-PRD: ${join(sessionPath, 'ai-prd.md')}
 Codex handoff: ${join(sessionPath, 'handoff-codex.md')}
 v0 handoff: ${join(sessionPath, 'handoff-v0.md')}
 Figma handoff: ${join(sessionPath, 'handoff-figma.md')}
+Follow-up questions: ${join(sessionPath, 'follow-up-questions.md')}
 
 项目文档已更新: ${join(target, 'docs')}
   PROJECT_BRIEF.md, UI_SPEC.md, acceptance-tests.md, decision-log.md, open-questions.md
@@ -1124,6 +1984,7 @@ Prototype brief: ${join(sessionPath, 'prototype-brief.md')}
 Codex handoff: ${join(sessionPath, 'handoff-codex.md')}
 v0 handoff: ${join(sessionPath, 'handoff-v0.md')}
 Figma handoff: ${join(sessionPath, 'handoff-figma.md')}
+Follow-up questions: ${join(sessionPath, 'follow-up-questions.md')}
 
 Project docs updated: ${join(target, 'docs')}
   PROJECT_BRIEF.md, UI_SPEC.md, acceptance-tests.md, decision-log.md, open-questions.md
@@ -1213,7 +2074,7 @@ async function runPrdInterview(args) {
       console.log(`${questionText(question, index, lang)}\n> ${lines[index] ?? ''}`);
       answers[question.key] = (lines[index] ?? '').trim();
     });
-    const { sessionPath } = writePrdAssets(target, answers, note);
+    const { sessionPath } = writePrdAssets(target, answers, note, typeQuestions);
     return finish(sessionPath);
   }
 
@@ -1249,7 +2110,7 @@ async function runPrdInterview(args) {
   if (notedIdea) {
     answers.idea = notedIdea;
   }
-  const { sessionPath } = writePrdAssets(target, answers, note);
+  const { sessionPath } = writePrdAssets(target, answers, note, typeQuestions);
   return finish(sessionPath);
 }
 
@@ -1289,6 +2150,26 @@ function runPrdHandoff(args) {
   return readFileSync(join(sessionPath, `handoff-${to}.md`), 'utf8');
 }
 
+function readIfExists(path) {
+  return existsSync(path) ? readFileSync(path, 'utf8') : '';
+}
+
+function normalizeForSearch(value) {
+  return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function includesMeaningfulSnippet(content, value) {
+  const snippet = normalizeForSearch(value);
+  if (!snippet || snippet === 'not specified.') {
+    return true;
+  }
+  return normalizeForSearch(content).includes(snippet);
+}
+
+function allSnippetsPresent(content, values) {
+  return values.filter((value) => (value || '').trim()).every((value) => includesMeaningfulSnippet(content, value));
+}
+
 function evaluatePrd(answers, sessionPath) {
   const text = (key) => (answers[key] || '').trim();
   const has = (key) => text(key).length > 0;
@@ -1324,9 +2205,56 @@ function evaluatePrd(answers, sessionPath) {
     'List rules that must be deterministic — or mark not-applicable.');
   recommend('Risks & guardrails', has('risks'), 'Name privacy/safety/misleading-output risks.');
 
-  const codexPath = join(sessionPath, 'handoff-codex.md');
-  const codexRefsPrd = existsSync(codexPath) && /ai-prd\.md/.test(readFileSync(codexPath, 'utf8'));
-  required('Codex handoff references PRD', codexRefsPrd, 'Handoff must point downstream tools to ai-prd.md.');
+  const targetRoot = dirname(dirname(dirname(sessionPath)));
+  const docsDir = join(targetRoot, 'docs');
+  const scopePath = join(docsDir, 'scope.md');
+  const acceptancePath = join(docsDir, 'acceptance-tests.md');
+  const scopeDoc = readIfExists(scopePath);
+  const acceptanceDoc = readIfExists(acceptancePath);
+
+  required('Project scope doc exists', existsSync(scopePath), 'Run ai-pm-dev prd to write docs/scope.md.');
+  if (existsSync(scopePath)) {
+    // Match per-item, not whole-string: a human may reorder, re-bullet, or reword
+    // around items in scope.md without tripping the gate. Only a genuinely missing
+    // must-have / non-goal / metric should fail it.
+    const mustHaveItems = listItems(text('mvpScope')).slice(0, 3);
+    const expectedScope = [
+      ...mustHaveItems,
+      text('oneThing'),
+      ...listItems(text('nonGoals')),
+      ...listItems(text('acceptanceCriteria')),
+    ];
+    required('Project scope matches latest PRD', allSnippetsPresent(scopeDoc, expectedScope),
+      'Regenerate or update docs/scope.md so must-haves, the one thing, non-goals, and metric match the latest PRD.');
+  }
+
+  required('Project acceptance tests doc exists', existsSync(acceptancePath),
+    'Run ai-pm-dev prd to write docs/acceptance-tests.md.');
+  if (existsSync(acceptancePath)) {
+    required('Acceptance tests cover latest PRD', allSnippetsPresent(acceptanceDoc, [
+      ...listItems(text('acceptanceCriteria')),
+      text('coreWorkflow'),
+    ]), 'Update docs/acceptance-tests.md so it covers the primary metric and core workflow.');
+  }
+
+  const handoffFiles = ['codex', 'v0', 'figma'].map((name) => ({
+    name,
+    path: join(sessionPath, `handoff-${name}.md`),
+  }));
+  const allHandoffsExist = handoffFiles.every((file) => existsSync(file.path));
+  required('All handoff files exist', allHandoffsExist, 'Regenerate PRD handoffs with ai-pm-dev prd.');
+  if (allHandoffsExist) {
+    const handoffRefs = handoffFiles.every((file) => {
+      const content = readFileSync(file.path, 'utf8');
+      return /ai-prd\.md/.test(content) && /scope\.md/.test(content) && /acceptance-tests\.md/.test(content);
+    });
+    required('Handoffs reference PRD gates', handoffRefs,
+      'Each handoff must reference ai-prd.md, scope.md, and acceptance-tests.md.');
+
+    const nonGoalInHandoffs = !has('nonGoals') || handoffFiles.every((file) => includesMeaningfulSnippet(readFileSync(file.path, 'utf8'), text('nonGoals')));
+    required('Handoffs carry non-goals', nonGoalInHandoffs,
+      'Each handoff must carry explicit non-goals so downstream tools do not expand v1 silently.');
+  }
 
   return checks;
 }
@@ -1464,6 +2392,10 @@ try {
     process.stdout.write(runStart(args));
   } else if (command === 'decide') {
     process.stdout.write(runDecide(args));
+  } else if (command === 'decision-record') {
+    process.stdout.write(runDecisionRecord(args));
+  } else if (command === 'bug') {
+    process.stdout.write(runBug(args));
   } else if (command === 'note') {
     process.stdout.write(runNote(args));
   } else if (command === 'pitfall') {
@@ -1476,10 +2408,22 @@ try {
     process.stdout.write(runAsk(args));
   } else if (command === 'brief') {
     process.stdout.write(runBrief(args));
+  } else if (command === 'dashboard') {
+    process.stdout.write(runDashboard(args));
   } else if (command === 'checkpoint') {
     process.stdout.write(runCheckpoint(args));
   } else if (command === 'timeline') {
     process.stdout.write(runTimeline(args));
+  } else if (command === 'install-ownership') {
+    process.stdout.write(runInstallOwnership(args));
+  } else if (command === 'review-route') {
+    process.stdout.write(runReviewRoute(args));
+  } else if (command === 'skill') {
+    process.stdout.write(runSkill(args));
+  } else if (command === 'workflow') {
+    process.stdout.write(runWorkflow(args));
+  } else if (command === 'install-pr-template') {
+    process.stdout.write(runInstallPrTemplate(args));
   } else if (command === 'install-hook') {
     process.stdout.write(runInstallHook(args));
   } else if (command === 'uninstall-hook') {

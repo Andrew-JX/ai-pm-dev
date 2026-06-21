@@ -67,3 +67,15 @@ description: Use when the user reports an error, exception, failing test, regres
 负责维护项目操作层文档（位于 `docs/`）：
 
 - `troubleshooting.md` — 每次修复非显而易见的 bug 后追加：症状、根因、修复、验证。
+
+## AI Collaboration Hardening
+
+For bug work:
+
+1. If the report lacks actual/expected/repro/impact/verify, ask for it or create `ai-pm-dev bug ...` before fixing so the context is explicit.
+2. Reproduce or collect closest evidence before changing code; label unverified hypotheses as hypotheses.
+3. Debug by layer: UI/client, API, service/domain, persistence, config/env, dependency.
+4. Prefer the smallest fix that addresses root cause; do not mask errors or delete tests.
+5. Add/update a regression check when feasible.
+6. Record reusable lessons with `ai-pm-dev pitfall` so docs update with the fix evidence.
+7. If the fix touches data, config, auth, or a release path, name the rollback plan before merging.

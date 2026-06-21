@@ -58,6 +58,7 @@ try {
     assert.equal(existsSync(join(sessionPath, 'handoff-codex.md')), true);
     assert.equal(existsSync(join(sessionPath, 'handoff-v0.md')), true);
     assert.equal(existsSync(join(sessionPath, 'handoff-figma.md')), true);
+    assert.equal(existsSync(join(sessionPath, 'follow-up-questions.md')), true);
     assert.equal(existsSync(join(target, 'memory', 'current-ai-prd.md')), true);
 
     // prd fills the project operating-layer docs.
@@ -84,10 +85,15 @@ try {
     const scope = readFileSync(join(target, 'docs', 'scope.md'), 'utf8');
     assert.match(scope, /## The one thing/);
     assert.match(scope, /Workout logging/);
+    const followUps = readFileSync(join(sessionPath, 'follow-up-questions.md'), 'utf8');
+    assert.match(followUps, /No LLM API was called/);
 
     const codexPrompt = runCli(['prd', 'handoff', '--to', 'codex', '--target', target]);
     assert.match(codexPrompt, /Codex Implementation Handoff/);
     assert.match(codexPrompt, /AI fitness logging tool/);
+    assert.match(codexPrompt, /scope\.md/);
+    assert.match(codexPrompt, /acceptance-tests\.md/);
+    assert.match(codexPrompt, /No social features in v1/);
 
     const status = runCli(['prd', 'status', '--target', target]);
     assert.match(status, /Latest PRD Session/);
@@ -144,10 +150,58 @@ try {
     const checkOutput = runCli(['prd', 'check', '--target', target]);
     assert.match(checkOutput, /PRD Quality Check/);
     assert.match(checkOutput, /Overall: PASS/);
+    assert.match(checkOutput, /PASS Project scope matches latest PRD/);
+    assert.match(checkOutput, /PASS Acceptance tests cover latest PRD/);
+    assert.match(checkOutput, /PASS Handoffs reference PRD gates/);
     const sessionRoot = join(target, '.ai-pm-dev', 'prd-sessions');
     const sessionName = readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8');
     assert.match(sessionName, /ai-fitness-logging-tool/);
     assert.match(checkOutput, /Report:/);
+
+    const dashboardOutput = runCli(['dashboard', '--target', target]);
+    assert.match(dashboardOutput, /Dashboard written/);
+    const dashboard = readFileSync(join(target, '.ai-pm-dev', 'dashboard.html'), 'utf8');
+    assert.match(dashboard, /AI fitness logging tool/);
+    assert.match(dashboard, /Gate: <span class="pass">PASS/);
+    assert.match(dashboard, /Workout logging/);
+  }
+
+  {
+    // prd check --strict fails when project docs drift away from the latest PRD.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-drift-'));
+    tempRoots.push(target);
+
+    const answers = [
+      'AI fitness logging tool',
+      'Fitness beginners',
+      'They cannot tell whether training improves',
+      'Scattered notes',
+      'Log workout, review progress, receive AI summary',
+      'Workout logging, progress trend, weekly summary',
+      'Workout logging',
+      'No social features in v1',
+      'Sets, reps, weight',
+      'Volume must be deterministic',
+      'AI only summarizes',
+      'Show the workouts used',
+      'Protect health data',
+      'A beginner understands weekly progress within five minutes',
+    ].join('\n');
+    runCli(['prd', '--target', target], { input: `${answers}\n` });
+    writeFileSync(join(target, 'docs', 'scope.md'), '# Scope\n\nA stale scope for something else.\n', 'utf8');
+    writeFileSync(join(target, 'docs', 'acceptance-tests.md'), '# Acceptance Tests\n\nA stale test plan.\n', 'utf8');
+
+    let failed = false;
+    let out = '';
+    try {
+      runCli(['prd', 'check', '--strict', '--target', target]);
+    } catch (error) {
+      failed = true;
+      out = error.stdout || '';
+    }
+    assert.equal(failed, true, 'strict check should fail when docs drift from the latest PRD');
+    assert.match(out, /FAIL Project scope matches latest PRD/);
+    assert.match(out, /FAIL Acceptance tests cover latest PRD/);
   }
 
   {
@@ -210,6 +264,13 @@ try {
     const openQuestions = readFileSync(join(target, 'docs', 'open-questions.md'), 'utf8');
     assert.match(openQuestions, /Non-goals:/);
     assert.match(openQuestions, /The one thing:/);
+    assert.match(openQuestions, /List exactly 1-3 v1 must-haves/);
+
+    const sessionDir = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const followUps = readFileSync(join(sessionDir, 'follow-up-questions.md'), 'utf8');
+    assert.match(followUps, /Adaptive Follow-up Questions/);
+    assert.match(followUps, /List exactly 1-3 v1 must-haves/);
+    assert.match(followUps, /If only one feature shipped this week/);
   }
 
   {
@@ -231,6 +292,89 @@ try {
     const answers = JSON.parse(readFileSync(join(sessionDir, 'answers.json'), 'utf8'));
     assert.equal(answers.idea, 'Floating prompt assistant');
     assert.equal(answers.targetUsers, 'Knowledge workers');
+    const followUps = readFileSync(join(sessionDir, 'follow-up-questions.md'), 'utf8');
+    assert.match(followUps, /Current workaround/);
+    assert.match(followUps, /Core workflow/);
+  }
+
+  {
+    // A single must-have containing a comma is one item when separated by semicolons,
+    // so the "<=3 must-haves" gate does not false-fail. (Before: comma-split = 4 items.)
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-count-'));
+    tempRoots.push(target);
+
+    const answers = [
+      'AI fitness logging tool',
+      'Fitness beginners',
+      'They cannot tell whether training improves',
+      'Scattered notes',
+      'Log workout, review progress, receive AI summary',
+      'Log weight, steps and sleep; weekly summary; reminders',
+      'Workout logging',
+      'No social features in v1',
+      'Sets, reps, weight',
+      'Volume must be deterministic',
+      'AI only summarizes',
+      'Show the workouts used',
+      'Protect health data',
+      'A beginner understands weekly progress within five minutes',
+    ].join('\n');
+    runCli(['prd', '--target', target], { input: `${answers}\n` });
+
+    const checkOutput = runCli(['prd', 'check', '--target', target]);
+    assert.match(checkOutput, /PASS Must-haves prioritized \(<=3\)/);
+    assert.match(checkOutput, /PASS Project scope matches latest PRD/);
+
+    // The comma-bearing must-have survives as a single item in scope.md.
+    const scope = readFileSync(join(target, 'docs', 'scope.md'), 'utf8');
+    assert.match(scope, /- Log weight, steps and sleep/);
+  }
+
+  {
+    // The scope gate matches per-item, so a hand-reformatted scope.md (reordered,
+    // re-bulleted, multi-item non-goals split) still PASSes as long as every
+    // must-have / non-goal / metric is still present.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-reformat-'));
+    tempRoots.push(target);
+
+    const answers = [
+      'AI fitness logging tool',
+      'Fitness beginners',
+      'They cannot tell whether training improves',
+      'Scattered notes',
+      'Log workout, review progress, receive AI summary',
+      'Workout logging; progress trend; weekly summary',
+      'Workout logging',
+      'No social features; no offline mode',
+      'Sets, reps, weight',
+      'Volume must be deterministic',
+      'AI only summarizes',
+      'Show the workouts used',
+      'Protect health data',
+      'A beginner understands weekly progress within five minutes',
+    ].join('\n');
+    runCli(['prd', '--target', target], { input: `${answers}\n` });
+
+    // Rewrite scope.md by hand: different layout/order, non-goals split into bullets.
+    // Every item is still present, just reworded around.
+    writeFileSync(join(target, 'docs', 'scope.md'), `# Project Scope (hand-edited)
+
+## What we ship first
+- weekly summary
+- progress trend
+- Workout logging
+
+The single thing that proves it: Workout logging
+
+## Deliberately not doing
+- no offline mode
+- No social features
+
+Success signal: A beginner understands weekly progress within five minutes
+`, 'utf8');
+
+    const checkOutput = runCli(['prd', 'check', '--target', target]);
+    assert.match(checkOutput, /PASS Project scope matches latest PRD/);
   }
 } finally {
   for (const root of tempRoots) {

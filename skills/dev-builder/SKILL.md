@@ -72,3 +72,15 @@ description: Use when the user has confirmed an implementation plan or explicitl
 - `api-contract.md` — 存在后端时记录接口契约。
 - `db-schema.md` — 存在持久化时记录数据结构。
 - `decision-log.md` — 追加实现期关键决策及原因。
+
+## AI Collaboration Hardening
+
+During implementation:
+
+1. Start by running or simulating `ai-pm-dev review-route --paths "<files>"`; read routed docs before editing.
+2. Keep the diff narrow; avoid drive-by refactors and unrelated formatting churn.
+3. Preserve user changes and notes; never overwrite unrequested edits.
+4. Stop before destructive, security, permission, migration, external-cost, or data-loss changes unless the user confirmed them.
+5. After each slice, run the planned verification; report exact commands and results, not "tested".
+6. Update docs via `decide`, `note`, `pitfall`, `bug`, or `decision-record` when behavior, scope, risk, or troubleshooting changed.
+7. For migrations, destructive edits, or release-facing behavior, state the rollback path before changing code.

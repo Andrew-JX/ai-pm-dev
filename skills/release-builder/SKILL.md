@@ -70,3 +70,15 @@ description: Use when the user is preparing a build, deployment, handoff, delive
 - `local-run-guide.md` — 本地运行步骤。
 - `release-checklist.md` — 发布前检查项。
 - `demo-script.md` — 演示走查脚本。
+
+## AI Collaboration Hardening
+
+Before saying "ready":
+
+1. Collect evidence, not vibes: exact build/test commands, smoke flow, environment, and artifact/version.
+2. Run or consult `ai-pm-dev review-route --paths "<release files>"` so the release context includes routed docs and checks.
+3. Run `ai-pm-dev prd check --strict` and consult `ai-pm-dev dashboard`.
+4. Verify PR template fields: release note, docs note, must-have mapping, non-goal boundary, test evidence.
+5. Confirm rollback path before deploy/release; if rollback is unknown, mark blocked.
+6. Check secrets/config/env/migrations are handled outside source and documented.
+7. Write/update `release-checklist.md`, `local-run-guide.md`, or `demo-script.md` when release knowledge would otherwise live only in chat.
