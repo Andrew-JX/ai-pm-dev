@@ -88,8 +88,8 @@ try {
 
   {
     const output = runNpm(['pack', '--dry-run']);
-    assert.match(output, /ai-pm-dev-1\.0\.0\.tgz/);
-    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.0.0.tgz')), false);
+    assert.match(output, /ai-pm-dev-1\.1\.0\.tgz/);
+    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.1.0.tgz')), false);
   }
 } finally {
   for (const root of tempRoots) {

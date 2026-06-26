@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 1.1.0 (Project Operating Layer + Quality Gate)
+## 1.1.0 — 2026-06-26 (Project Operating Layer + Quality Gate + Product Workbench)
 
 Collaboration mechanisms — close the inbound side of context and record the lifecycle:
 
@@ -10,6 +10,12 @@ Collaboration mechanisms — close the inbound side of context and record the li
 - Add `ai-pm-dev checkpoint "<phase>"` and `ai-pm-dev timeline`: record and view the session lifecycle (`prd` auto-records a checkpoint; mark build/verify/release yourself).
 - Add `ai-pm-dev dashboard`: write a read-only HTML status dashboard for scope, gate status, docs health, open questions, decisions, and timeline.
 
+Product workbench:
+
+- Add `apps/web`: a local product workbench (Vite + React + TypeScript) that visualizes the existing CLI workflow with a phase lifecycle, artifact cards, PRD gate, and next-step guidance; it triggers quick PRD / `prd check` / checkpoint / decision through the existing CLI.
+- Add a local Node API (`server.mjs`, bound to `127.0.0.1`): `/api/project`, `/api/prd`, `/api/check`, `/api/checkpoint`, `/api/note`, and `/api/decision`.
+- Quick PRD input is now passed by field key (JSON stdin), not line order, avoiding silent field misalignment.
+- Add root scripts: `npm run web` and `npm run web:build`.
 
 Force the hard PM work (cut scope, set priorities) instead of only collecting answers:
 

@@ -7,7 +7,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const version = '1.0.0';
+const version = '1.1.0';
 const requiredSkills = [
   'prd-generator',
   'product-spec-builder',
