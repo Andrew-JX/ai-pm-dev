@@ -4,7 +4,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { docStatus } from '../apps/web/server/project-state.mjs';
+import { docStatus, readProjectState } from '../apps/web/server/project-state.mjs';
+import { evaluatePrd } from '../workflow-core/prd-gates.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cliPath = join(repoRoot, 'bin', 'ai-pm-dev.mjs');
@@ -83,8 +84,12 @@ try {
     const report = readFileSync(join(session, 'quality-report.md'), 'utf8');
     assert.match(report, /Overall: PASS \(required 15\/15, recommended 6\/6\)/);
     assert.match(report, /\| PASS \| required \| Project scope matches latest PRD \|  \|/);
+    assert.equal(existsSync(join(session, 'quality-report.json')), true);
     const scope = readFileSync(join(target, 'docs', 'scope.md'), 'utf8');
     assert.match(scope, /- Log weight, steps and sleep/);
+
+    rmSync(join(session, 'quality-report.json'), { force: true });
+    assert.equal(readProjectState(target).qualityGate.overall, 'UNKNOWN');
   }
 
   {
@@ -112,6 +117,49 @@ try {
     assert.equal(failed, true, 'bad quick PRD JSON should fail cleanly');
     assert.match(stderr, /Invalid JSON stdin for quick PRD input/);
     assert.doesNotMatch(stderr, /SyntaxError/);
+  }
+
+  {
+    const target = join(tmpdir(), 'ai-pm-dev-core-spy-project');
+    const sessionPath = join(target, '.ai-pm-dev', 'prd-sessions', '2026-06-09-100000-spy');
+    const accessed = [];
+    const expected = [
+      join(target, 'docs', 'scope.md'),
+      join(target, 'docs', 'acceptance-tests.md'),
+      join(sessionPath, 'handoff-codex.md'),
+      join(sessionPath, 'handoff-v0.md'),
+      join(sessionPath, 'handoff-figma.md'),
+    ];
+    const answers = {
+      idea: 'Spy project',
+      targetUsers: 'Users',
+      painPoints: 'Pain',
+      coreWorkflow: 'Start to finish',
+      mvpScope: 'One thing',
+      oneThing: 'One thing',
+      nonGoals: 'No extras',
+      dataModel: 'Data',
+      deterministicRules: 'Rules',
+      aiBoundaries: 'AI summarizes',
+      risks: 'Risks',
+      acceptanceCriteria: 'Within five minutes',
+    };
+    evaluatePrd(answers, {
+      sessionPath,
+      exists(path) {
+        accessed.push(path);
+        return true;
+      },
+      readFile(path) {
+        accessed.push(path);
+        if (path.endsWith('scope.md')) return 'One thing\nNo extras\nWithin five minutes';
+        if (path.endsWith('acceptance-tests.md')) return 'Within five minutes\nStart to finish';
+        return 'ai-prd.md scope.md acceptance-tests.md No extras';
+      },
+    });
+    for (const path of expected) {
+      assert.ok(accessed.includes(path), `expected evaluatePrd to access ${path}`);
+    }
   }
 } finally {
   for (const dir of tempRoots) {

@@ -15,6 +15,7 @@ import {
   stripPlaceholderRows,
 } from '../workflow-core/docs.mjs';
 import { countItems, listItems, splitItems } from '../workflow-core/items.mjs';
+import { evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import {
   parseQuickPrdStdin,
   prdQuestions,
@@ -22,6 +23,7 @@ import {
   questionText,
   questionsForType,
 } from '../workflow-core/questions.mjs';
+import { buildQualityReportJson, buildQualityReportMarkdown } from '../workflow-core/quality-report.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.1.0';
@@ -2024,147 +2026,6 @@ function runPrdHandoff(args) {
   return readFileSync(join(sessionPath, `handoff-${to}.md`), 'utf8');
 }
 
-function readIfExists(path) {
-  return existsSync(path) ? readFileSync(path, 'utf8') : '';
-}
-
-function normalizeForSearch(value) {
-  return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function includesMeaningfulSnippet(content, value) {
-  const snippet = normalizeForSearch(value);
-  if (!snippet || snippet === 'not specified.') {
-    return true;
-  }
-  return normalizeForSearch(content).includes(snippet);
-}
-
-function allSnippetsPresent(content, values) {
-  return values.filter((value) => (value || '').trim()).every((value) => includesMeaningfulSnippet(content, value));
-}
-
-function evaluatePrd(answers, sessionPath) {
-  const text = (key) => (answers[key] || '').trim();
-  const has = (key) => text(key).length > 0;
-  const checks = [];
-
-  const required = (name, pass, hint) => checks.push({ name, severity: 'required', pass, hint });
-  const recommend = (name, pass, hint) => checks.push({ name, severity: 'recommended', pass, hint });
-
-  required('Product idea present', has('idea'), 'A one-sentence product idea is mandatory.');
-  required('Target users named', has('targetUsers'), 'State the first user group.');
-  required('Pain point stated', has('painPoints'), 'Describe the sharpest user pain.');
-  required('Must-haves present', has('mvpScope'), 'List the v1 must-haves.');
-  required('Primary metric present', has('acceptanceCriteria'), 'State one measurable success signal.');
-
-  // Forcing checks — the hard PM work: cutting and prioritizing.
-  required('Must-haves prioritized (<=3)', has('mvpScope') && countItems(text('mvpScope')) <= 3,
-    `Cut to at most 3 must-haves (you listed ${countItems(text('mvpScope'))}); defer the rest in scope.md.`);
-  required('Non-goals declared (something cut)', has('nonGoals'),
-    'Name at least one thing v1 is deliberately NOT doing.');
-  required('The one thing chosen', has('oneThing'),
-    'Pick the single feature that proves the idea if you could ship only one.');
-
-  const acceptance = text('acceptanceCriteria');
-  const verifiable = /\d|%|min|sec|within|less than|分钟|秒|百分|至少|次|完成/.test(acceptance);
-  recommend('Acceptance looks verifiable', has('acceptanceCriteria') && verifiable,
-    'Prefer measurable/observable acceptance over vague statements.');
-
-  recommend('Core workflow described', has('coreWorkflow'), 'Describe entry-to-value flow.');
-  recommend('Data model described', has('dataModel'), 'State what data is recorded or generated, or mark not-applicable.');
-  recommend('AI boundary declared', has('aiBoundaries'),
-    'Say what AI may do and must never decide — or mark not-applicable if the product uses no AI.');
-  recommend('Deterministic rules declared', has('deterministicRules'),
-    'List rules that must be deterministic — or mark not-applicable.');
-  recommend('Risks & guardrails', has('risks'), 'Name privacy/safety/misleading-output risks.');
-
-  const targetRoot = dirname(dirname(dirname(sessionPath)));
-  const docsDir = join(targetRoot, 'docs');
-  const scopePath = join(docsDir, 'scope.md');
-  const acceptancePath = join(docsDir, 'acceptance-tests.md');
-  const scopeDoc = readIfExists(scopePath);
-  const acceptanceDoc = readIfExists(acceptancePath);
-
-  required('Project scope doc exists', existsSync(scopePath), 'Run ai-pm-dev prd to write docs/scope.md.');
-  if (existsSync(scopePath)) {
-    // Match per-item, not whole-string: a human may reorder, re-bullet, or reword
-    // around items in scope.md without tripping the gate. Only a genuinely missing
-    // must-have / non-goal / metric should fail it.
-    const mustHaveItems = listItems(text('mvpScope')).slice(0, 3);
-    const expectedScope = [
-      ...mustHaveItems,
-      text('oneThing'),
-      ...listItems(text('nonGoals')),
-      ...listItems(text('acceptanceCriteria')),
-    ];
-    required('Project scope matches latest PRD', allSnippetsPresent(scopeDoc, expectedScope),
-      'Regenerate or update docs/scope.md so must-haves, the one thing, non-goals, and metric match the latest PRD.');
-  }
-
-  required('Project acceptance tests doc exists', existsSync(acceptancePath),
-    'Run ai-pm-dev prd to write docs/acceptance-tests.md.');
-  if (existsSync(acceptancePath)) {
-    required('Acceptance tests cover latest PRD', allSnippetsPresent(acceptanceDoc, [
-      ...listItems(text('acceptanceCriteria')),
-      text('coreWorkflow'),
-    ]), 'Update docs/acceptance-tests.md so it covers the primary metric and core workflow.');
-  }
-
-  const handoffFiles = ['codex', 'v0', 'figma'].map((name) => ({
-    name,
-    path: join(sessionPath, `handoff-${name}.md`),
-  }));
-  const allHandoffsExist = handoffFiles.every((file) => existsSync(file.path));
-  required('All handoff files exist', allHandoffsExist, 'Regenerate PRD handoffs with ai-pm-dev prd.');
-  if (allHandoffsExist) {
-    const handoffRefs = handoffFiles.every((file) => {
-      const content = readFileSync(file.path, 'utf8');
-      return /ai-prd\.md/.test(content) && /scope\.md/.test(content) && /acceptance-tests\.md/.test(content);
-    });
-    required('Handoffs reference PRD gates', handoffRefs,
-      'Each handoff must reference ai-prd.md, scope.md, and acceptance-tests.md.');
-
-    const nonGoalInHandoffs = !has('nonGoals') || handoffFiles.every((file) => includesMeaningfulSnippet(readFileSync(file.path, 'utf8'), text('nonGoals')));
-    required('Handoffs carry non-goals', nonGoalInHandoffs,
-      'Each handoff must carry explicit non-goals so downstream tools do not expand v1 silently.');
-  }
-
-  return checks;
-}
-
-function buildQualityReport(answers, checks, score) {
-  const row = (check) => {
-    const status = check.pass ? 'PASS' : (check.severity === 'required' ? 'FAIL' : 'WARN');
-    return `| ${status} | ${check.severity} | ${check.name} | ${check.pass ? '' : check.hint} |`;
-  };
-  return `# PRD Quality Report: ${answers.idea || 'Untitled'}
-
-Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
-
-| Status | Severity | Check | Fix |
-| --- | --- | --- | --- |
-${checks.map(row).join('\n')}
-
-Generated by \`ai-pm-dev prd check\`.
-`;
-}
-
-function scoreChecks(checks) {
-  const req = checks.filter((c) => c.severity === 'required');
-  const rec = checks.filter((c) => c.severity === 'recommended');
-  const requiredPass = req.filter((c) => c.pass).length;
-  const recommendedPass = rec.filter((c) => c.pass).length;
-  const overall = requiredPass < req.length ? 'FAIL' : (recommendedPass < rec.length ? 'WARN' : 'PASS');
-  return {
-    overall,
-    requiredPass,
-    requiredTotal: req.length,
-    recommendedPass,
-    recommendedTotal: rec.length,
-  };
-}
-
 function runPrdCheck(args) {
   const target = resolve(parseTarget(args));
   const sessionPath = latestPrdSession(target);
@@ -2175,9 +2036,11 @@ function runPrdCheck(args) {
   const answers = JSON.parse(readFileSync(join(sessionPath, 'answers.json'), 'utf8'));
   const checks = evaluatePrd(answers, sessionPath);
   const score = scoreChecks(checks);
-  const report = buildQualityReport(answers, checks, score);
+  const report = buildQualityReportMarkdown(answers, checks, score);
   const reportPath = join(sessionPath, 'quality-report.md');
+  const reportJsonPath = join(sessionPath, 'quality-report.json');
   writeFileSync(reportPath, report, 'utf8');
+  writeFileSync(reportJsonPath, `${JSON.stringify(buildQualityReportJson(answers, checks, score, { sessionPath }), null, 2)}\n`, 'utf8');
 
   const lines = checks.map((check) => {
     const status = check.pass ? 'PASS' : (check.severity === 'required' ? 'FAIL' : 'WARN');

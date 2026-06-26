@@ -75,41 +75,18 @@ function latestSession(target) {
     path,
     idea: answers.idea || '',
     answers,
-    qualityReport: readText(join(path, 'quality-report.md')),
+    qualityReportJson: readJson(join(path, 'quality-report.json')),
   };
 }
 
-function parseQualityReport(report) {
-  if (!report) {
-    return {
-      overall: 'UNKNOWN',
-      requiredPass: 0,
-      requiredTotal: 0,
-      recommendedPass: 0,
-      recommendedTotal: 0,
-      checks: [],
-    };
-  }
-  const summary = report.match(/Overall:\s+(PASS|WARN|FAIL)\s+\(required\s+(\d+)\/(\d+),\s+recommended\s+(\d+)\/(\d+)\)/);
-  const checks = report
-    .split(/\r?\n/)
-    .filter((line) => /^\|\s+(PASS|WARN|FAIL)\s+\|/.test(line))
-    .map((line) => {
-      const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-      return {
-        status: cells[0],
-        severity: cells[1],
-        name: cells[2],
-        fix: cells[3] || '',
-      };
-    });
+function unknownQualityGate() {
   return {
-    overall: summary?.[1] || 'UNKNOWN',
-    requiredPass: Number(summary?.[2] || 0),
-    requiredTotal: Number(summary?.[3] || 0),
-    recommendedPass: Number(summary?.[4] || 0),
-    recommendedTotal: Number(summary?.[5] || 0),
-    checks,
+    overall: 'UNKNOWN',
+    requiredPass: 0,
+    requiredTotal: 0,
+    recommendedPass: 0,
+    recommendedTotal: 0,
+    checks: [],
   };
 }
 
@@ -205,7 +182,7 @@ export function readProjectState(targetInput = process.cwd()) {
   });
   const session = latestSession(target);
   const state = readJson(join(target, '.ai-pm-dev', 'state.json')) || {};
-  const qualityGate = parseQualityReport(session?.qualityReport || '');
+  const qualityGate = session?.qualityReportJson || unknownQualityGate();
   const phases = phaseStatuses(target, session, artifacts, qualityGate);
   const currentPhase = deriveCurrentPhase(phases);
   const nextAction = deriveNextAction(projectInitialized, session, qualityGate, currentPhase);
