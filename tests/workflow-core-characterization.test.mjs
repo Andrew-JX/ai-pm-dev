@@ -97,6 +97,22 @@ try {
     assert.equal(docStatus(briefPath), 'filled');
     assert.equal(docStatus(join(target, 'docs', 'missing.md')), 'missing');
   }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-bad-json-'));
+    tempRoots.push(target);
+    let failed = false;
+    let stderr = '';
+    try {
+      runCli(['prd', '--target', target, '--quick'], { input: '{"idea":' });
+    } catch (error) {
+      failed = true;
+      stderr = error.stderr || '';
+    }
+    assert.equal(failed, true, 'bad quick PRD JSON should fail cleanly');
+    assert.match(stderr, /Invalid JSON stdin for quick PRD input/);
+    assert.doesNotMatch(stderr, /SyntaxError/);
+  }
 } finally {
   for (const dir of tempRoots) {
     rmSync(dir, { recursive: true, force: true });
