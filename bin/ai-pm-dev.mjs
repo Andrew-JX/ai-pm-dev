@@ -14,7 +14,20 @@ import {
   docIsStubContent,
   stripPlaceholderRows,
 } from '../workflow-core/docs.mjs';
+import {
+  HOOK_MARKER,
+  PR_TEMPLATE_MARKER,
+  prTemplateContent,
+  preCommitScript,
+} from '../workflow-core/installers.mjs';
 import { countItems, listItems, splitItems } from '../workflow-core/items.mjs';
+import {
+  OWNERSHIP_MARKER,
+  ownershipJson,
+  ownershipMarkdown,
+  ownershipRules,
+  ruleMatchesPath,
+} from '../workflow-core/ownership.mjs';
 import { evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import {
   parseQuickPrdStdin,
@@ -213,29 +226,6 @@ function runStart(args) {
   return runNodeScript('start-task.mjs', ['--task', task, ...targetArgs, ...rest]);
 }
 
-const HOOK_MARKER = 'AI PM Dev Agent pre-commit gate';
-
-function preCommitScript() {
-  return `#!/bin/sh
-# ${HOOK_MARKER} — installed by \`ai-pm-dev install-hook\`.
-# Blocks a commit that changes work files without recording anything in docs/.
-changed=$(git diff --cached --name-only --diff-filter=ACMR)
-[ -z "$changed" ] && exit 0
-work=$(printf '%s\\n' "$changed" | grep -v '^docs/' | grep -v '^\\.ai-pm-dev/' | grep -v '^memory/' || true)
-docs=$(printf '%s\\n' "$changed" | grep '^docs/' || true)
-if [ -n "$work" ] && [ -z "$docs" ]; then
-  echo "ai-pm-dev: commit blocked — code/content changed but docs/ was not updated."
-  echo "Record this work first (one line each), then 'git add docs/' and commit again:"
-  echo "  ai-pm-dev decide \\"<decision>\\" --why \\"<reason>\\""
-  echo "  ai-pm-dev note \\"<progress>\\""
-  echo "  ai-pm-dev pitfall \\"<symptom>\\" --fix \\"<fix>\\""
-  echo "To bypass on purpose: git commit --no-verify"
-  exit 1
-fi
-exit 0
-`;
-}
-
 function gitHooksDir(target) {
   const gitDir = join(target, '.git');
   if (!existsSync(gitDir)) {
@@ -286,54 +276,6 @@ function runUninstallHook(args) {
   return `Removed ai-pm-dev pre-commit gate from ${hookPath}\n`;
 }
 
-const PR_TEMPLATE_MARKER = 'AI PM Dev Agent PR template gate';
-
-function prTemplateContent() {
-  return `<!-- ${PR_TEMPLATE_MARKER}: installed by ai-pm-dev install-pr-template -->
-
-# PR Gate
-
-## Summary
-
-What changed, and why is this the smallest useful change?
-
-## PRD / Scope Link
-
-- Latest PRD session: \`.ai-pm-dev/prd-sessions/<session>\`
-- Related docs: \`docs/scope.md\`, \`docs/acceptance-tests.md\`
-- Must-have this PR implements:
-- Non-goal check: this PR does not implement or expand into:
-
-## Gate Checklist
-
-- [ ] I ran \`ai-pm-dev prd check --strict\`.
-- [ ] The change maps to a must-have in \`docs/scope.md\`.
-- [ ] The change does not sneak in a listed non-goal.
-- [ ] \`docs/acceptance-tests.md\` covers the behavior changed here.
-- [ ] I updated project docs with \`ai-pm-dev decide\`, \`note\`, \`pitfall\`, or direct docs edits where needed.
-
-## How Did You Test This Change?
-
-List the exact commands, checks, screenshots, or manual flows used.
-
-## Reviewer Notes
-
-Call out risky areas, permissions/data changes, migrations, or places where you want extra scrutiny.
-
-## User-Facing Change
-
-\`\`\`release-note
-NONE
-\`\`\`
-
-## Additional Documentation
-
-\`\`\`docs
-NONE
-\`\`\`
-`;
-}
-
 function runInstallPrTemplate(args) {
   const target = resolve(parseTarget(args));
   const force = args.includes('--force');
@@ -351,97 +293,6 @@ function runInstallPrTemplate(args) {
   return `Installed GitHub PR template gate -> ${templatePath}
 
 It asks every PR to name the PRD session, mapped must-have, non-goal boundary, docs updates, and test evidence.
-`;
-}
-
-const OWNERSHIP_MARKER = 'AI PM Dev Agent ownership routing';
-const ownershipRules = [
-  {
-    id: 'product-scope',
-    name: 'Product scope / PRD boundary',
-    patterns: ['docs/PROJECT_BRIEF.md', 'docs/scope.md', '.ai-pm-dev/prd-sessions/*/ai-prd.md', '.ai-pm-dev/prd-sessions/*/scope.md'],
-    owner: 'prd-generator / product-spec-builder',
-    review: 'Product boundary review: must-have, one thing, non-goals, metric.',
-    docs: ['docs/PROJECT_BRIEF.md', 'docs/scope.md', 'docs/open-questions.md'],
-    checks: ['ai-pm-dev prd check --strict', 'ai-pm-dev dashboard'],
-  },
-  {
-    id: 'acceptance-gate',
-    name: 'Acceptance and quality gate',
-    patterns: ['docs/acceptance-tests.md', '.ai-pm-dev/prd-sessions/*/acceptance-tests.md', '.ai-pm-dev/prd-sessions/*/quality-report.md'],
-    owner: 'prd-generator / code-review',
-    review: 'Verification review: acceptance criteria, testability, drift from scope.',
-    docs: ['docs/acceptance-tests.md', 'docs/scope.md'],
-    checks: ['ai-pm-dev prd check --strict', 'npm test'],
-  },
-  {
-    id: 'cli-runtime',
-    name: 'CLI/runtime behavior',
-    patterns: ['bin/*', 'scripts/*', 'package.json'],
-    owner: 'dev-builder / code-review',
-    review: 'CLI behavior review: command UX, path safety, Windows compatibility, no unwanted overwrites.',
-    docs: ['README.md', 'CHANGELOG.md', 'docs/progress.md'],
-    checks: ['node --check bin/ai-pm-dev.mjs', 'npm test'],
-  },
-  {
-    id: 'workflow-rules',
-    name: 'Workflow rules and skills',
-    patterns: ['skills/*/SKILL.md', 'templates/*', 'operating-layer/*', 'operating-layer/docs/*'],
-    owner: 'dev-planner / code-review',
-    review: 'Operating-layer review: does the rule reduce drift without adding workflow bloat?',
-    docs: ['AGENTS.md', 'docs/decision-log.md'],
-    checks: ['npm test', 'ai-pm-dev doctor'],
-  },
-  {
-    id: 'decision-memory',
-    name: 'Decision and learning memory',
-    patterns: ['docs/decision-log.md', 'docs/decision-records/*', 'docs/progress.md', 'docs/troubleshooting.md', 'docs/open-questions.md'],
-    owner: 'all skills',
-    review: 'Traceability review: decision, why, risk, and follow-up remain discoverable.',
-    docs: ['docs/decision-log.md', 'docs/open-questions.md', 'docs/progress.md'],
-    checks: ['ai-pm-dev dashboard', 'ai-pm-dev doctor'],
-  },
-  {
-    id: 'github-gates',
-    name: 'GitHub / local gates',
-    patterns: ['.github/*', '.github/PULL_REQUEST_TEMPLATE.md', '.git/hooks/*'],
-    owner: 'release-builder / code-review',
-    review: 'Gate review: make sure the template/hook asks for PRD, scope, tests, and docs without blocking normal work unfairly.',
-    docs: ['README.md', 'CHANGELOG.md'],
-    checks: ['npm test'],
-  },
-];
-
-function ownershipJson() {
-  return `${JSON.stringify({
-    generatedBy: OWNERSHIP_MARKER,
-    rules: ownershipRules,
-  }, null, 2)}\n`;
-}
-
-function ownershipMarkdown() {
-  const rows = ownershipRules.map((rule) => `| ${rule.name} | \`${rule.patterns.join('`, `')}\` | ${rule.owner} | ${rule.checks.map((check) => `\`${check}\``).join('<br>')} |`).join('\n');
-  return `# Ownership and Review Routing
-
-<!-- ${OWNERSHIP_MARKER}: installed by ai-pm-dev install-ownership -->
-
-Use this as a local OWNERS map. It does not assign people; it routes changes to the right
-skill lens, docs, and gates so the project does not drift from its PRD.
-
-| Area | Paths | Owner / skill lens | Required checks |
-| --- | --- | --- | --- |
-${rows}
-
-## How to use
-
-Run:
-
-\`\`\`bash
-ai-pm-dev review-route --paths "docs/scope.md,bin/ai-pm-dev.mjs"
-\`\`\`
-
-Before implementation, read the routed docs. Before review, run the routed checks and paste
-the output or evidence into the PR template.
 `;
 }
 
@@ -478,17 +329,6 @@ Use: ai-pm-dev review-route --paths "docs/scope.md,bin/ai-pm-dev.mjs" --target "
 
 function normalizeRoutePath(value) {
   return (value || '').replace(/\\/g, '/').replace(/^\.\//, '').trim();
-}
-
-function patternToRegex(pattern) {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-  const globstar = '__AI_PM_DEV_GLOBSTAR__';
-  return new RegExp(`^${escaped.replace(/\*\*/g, globstar).replace(/\*/g, '[^/]*').replaceAll(globstar, '.*')}$`);
-}
-
-function ruleMatchesPath(rule, path) {
-  const normalized = normalizeRoutePath(path);
-  return rule.patterns.some((pattern) => patternToRegex(pattern).test(normalized));
 }
 
 function parseRoutePaths(args, target) {
