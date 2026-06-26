@@ -32,6 +32,8 @@ assert.ok(pkg.files.includes('CLAUDE.md'));
 assert.ok(pkg.files.includes('README.md'));
 assert.ok(pkg.files.includes('README.zh-CN.md'));
 assert.ok(pkg.files.includes('CHANGELOG.md'));
+assert.equal(pkg.files.includes('AI_PM_DEV_AGENT_PLAN.md'), false);
+assert.equal(pkg.files.includes('engineering'), false);
 assert.equal(pkg.engines.node, '>=18');
 
 assert.doesNotMatch(readme, /C:\\Users|Desktop\\my-product|15942/);

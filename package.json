@@ -23,8 +23,7 @@
     "CLAUDE.md",
     "README.md",
     "README.zh-CN.md",
-    "CHANGELOG.md",
-    "AI_PM_DEV_AGENT_PLAN.md"
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs && node tests/config.test.mjs && node tests/prd-session.test.mjs && node tests/web-workbench.test.mjs && node tests/workflow-core-characterization.test.mjs",
