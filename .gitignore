@@ -7,5 +7,6 @@ memory/current-task-prompt.md
 
 # Node
 node_modules/
+dist/
 *.tgz
 .npm-cache-test/

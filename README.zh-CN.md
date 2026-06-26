@@ -92,6 +92,23 @@ ai-pm-dev prd check       # 给 PRD 打分，生成 quality-report.md
 ai-pm-dev doctor          # 确认一切就绪
 ```
 
+## Phase 1 Web 工作台
+
+这个仓库现在包含第一版产品化工作台。它不会替代 CLI，而是把同一套项目操作层视觉化，并通过现有 CLI
+完成轻量动作。
+
+```bash
+npm install
+npm run web --workspace apps/web
+npm run web:build --workspace apps/web
+```
+
+工作台会读取一个已有目标项目，展示产品生命线、当前阶段、PRD gate、MVP scope、产物卡片、待确认问题、
+决策、进度和下一步建议。它也可以通过现有 `ai-pm-dev` CLI 触发 quick PRD、`prd check`、checkpoint
+和一行决策记录。
+
+Phase 1 暂不包含 React Flow、Agent runtime、自动 Demo/代码生成或 LLM API 调用。
+
 ## 然后交给编码工具 —— 两种方式
 
 **A. 直接打开文件夹（推荐）。** 在 Claude Code 或 Codex 里打开 `my-product`，它们会自动读取

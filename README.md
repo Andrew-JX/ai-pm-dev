@@ -107,6 +107,26 @@ ai-pm-dev doctor          # confirm everything is in place
 ai-pm-dev dashboard       # write a read-only project status dashboard
 ```
 
+## Phase 1 Web Workbench
+
+This repo now includes the first productized workbench for the local workflow kernel. It
+does not replace the CLI; it visualizes the same project operating layer and uses the CLI
+for lightweight actions.
+
+```bash
+npm install
+npm run web --workspace apps/web
+npm run web:build --workspace apps/web
+```
+
+The workbench reads an existing target project and shows the product lifecycle, current
+phase, PRD gate, MVP scope, artifact cards, open questions, decisions, progress, and next
+recommended action. It can also trigger quick PRD generation, `prd check`, checkpoints, and
+one-line decisions through the existing `ai-pm-dev` CLI.
+
+Phase 1 intentionally does not include React Flow, an agent runtime, automatic demo/code
+generation, or LLM API calls.
+
 ## Then hand it to a coding tool — two ways
 
 **A. Open the folder (recommended).** Open `my-product` in Claude Code or Codex. They read

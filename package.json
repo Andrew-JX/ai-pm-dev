@@ -4,10 +4,14 @@
   "description": "Local Idea-to-Build workflow CLI for AI-assisted product development.",
   "license": "MIT",
   "type": "module",
+  "workspaces": [
+    "apps/web"
+  ],
   "engines": {
     "node": ">=18"
   },
   "files": [
+    "apps",
     "bin",
     "scripts",
     "skills",
@@ -22,7 +26,9 @@
     "AI_PM_DEV_AGENT_PLAN.md"
   ],
   "scripts": {
-    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs && node tests/config.test.mjs && node tests/prd-session.test.mjs",
+    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs && node tests/config.test.mjs && node tests/prd-session.test.mjs && node tests/web-workbench.test.mjs",
+    "web": "npm run web --workspace apps/web",
+    "web:build": "npm run web:build --workspace apps/web",
     "init": "node scripts/init-ai-pm-dev.mjs",
     "start-task": "node scripts/start-task.mjs"
   },

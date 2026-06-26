@@ -19,6 +19,19 @@ ai-pm-dev prd --type consumer --lang zh
 ai-pm-dev prd check
 ```
 
+## View it in the Phase 1 workbench
+
+From this repository root:
+
+```bash
+npm install
+npm run web --workspace apps/web
+```
+
+Then set the target path to `examples/quick-date`. The workbench should show the existing
+PRD assets, scope, gate state, open questions, decisions, and next action without generating
+new code or running agents.
+
 ## What got generated (curated here)
 
 | File | What it is |
