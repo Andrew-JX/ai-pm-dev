@@ -51,6 +51,7 @@ export async function handleApiRequest(request) {
   const method = request.method.toUpperCase();
 
   if (method === 'GET' && url.pathname === '/api/project') {
+    // `target` is a trusted local path; if this server is ever exposed beyond localhost, add path allowlisting/validation first.
     const target = url.searchParams.get('target') || process.cwd();
     return json(200, readProjectState(target));
   }
@@ -62,7 +63,11 @@ export async function handleApiRequest(request) {
     if (!idea) {
       return json(400, { error: 'idea is required' });
     }
-    const input = `${idea}\n${body.targetUsers || ''}\n${body.painPoints || ''}\n`;
+    const input = JSON.stringify({
+      idea,
+      targetUsers: body.targetUsers || '',
+      painPoints: body.painPoints || '',
+    });
     const result = await runCli(['prd', '--quick', '--target', target], input);
     return json(result.ok ? 200 : 500, {
       result,

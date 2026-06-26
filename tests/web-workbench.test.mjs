@@ -69,6 +69,14 @@ try {
     assert.equal(projectBefore.body.projectInitialized, true);
     assert.equal(projectBefore.body.latestSession, null);
 
+    const missingIdea = await handleApiRequest({
+      method: 'POST',
+      url: '/api/prd',
+      body: JSON.stringify({ target }),
+    });
+    assert.equal(missingIdea.status, 400);
+    assert.match(missingIdea.body.error, /idea is required/);
+
     const prd = await handleApiRequest({
       method: 'POST',
       url: '/api/prd',
@@ -82,6 +90,9 @@ try {
     assert.equal(prd.status, 200);
     assert.match(prd.body.project.latestSession.name, /\d{4}-\d{2}-\d{2}-\d{6}-ai-fitness-logging-tool/);
     assert.equal(existsSync(join(target, 'docs', 'scope.md')), true);
+    const answers = JSON.parse(readFileSync(join(prd.body.project.latestSession.path, 'answers.json'), 'utf8'));
+    assert.equal(answers.targetUsers, 'Fitness beginners');
+    assert.equal(answers.painPoints, 'They cannot see weekly progress');
 
     const check = await handleApiRequest({
       method: 'POST',

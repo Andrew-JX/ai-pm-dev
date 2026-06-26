@@ -2062,7 +2062,10 @@ async function runPrdInterview(args) {
   const finish = (sessionPath) => prdCompletionMessage(target, sessionPath, lang) + (quick ? quickHandoffNote(lang) : '');
 
   if (!process.stdin.isTTY) {
-    const lines = readFileSync(0, 'utf8').split(/\r?\n/);
+    const stdin = readFileSync(0, 'utf8');
+    const trimmedStdin = stdin.trim();
+    const keyedInput = quick && trimmedStdin.startsWith('{') ? JSON.parse(trimmedStdin) : null;
+    const lines = keyedInput ? [] : stdin.split(/\r?\n/);
     const answers = notedIdea ? { idea: notedIdea } : {};
     const [introTitle, introHint] = prdIntro(lang);
     console.log(introTitle);
@@ -2071,8 +2074,9 @@ async function runPrdInterview(args) {
       console.log(`${ideaLabel}: ${notedIdea}\n`);
     }
     questions.forEach((question, index) => {
-      console.log(`${questionText(question, index, lang)}\n> ${lines[index] ?? ''}`);
-      answers[question.key] = (lines[index] ?? '').trim();
+      const answer = keyedInput ? keyedInput[question.key] : lines[index];
+      console.log(`${questionText(question, index, lang)}\n> ${answer ?? ''}`);
+      answers[question.key] = String(answer ?? '').trim();
     });
     const { sessionPath } = writePrdAssets(target, answers, note, typeQuestions);
     return finish(sessionPath);
