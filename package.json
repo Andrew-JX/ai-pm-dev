@@ -12,6 +12,7 @@
   },
   "files": [
     "apps",
+    "workflow-core",
     "bin",
     "scripts",
     "skills",
