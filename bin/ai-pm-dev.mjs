@@ -5,6 +5,15 @@ import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  DECISION_HEADER,
+  OPEN_QUESTIONS_HEADER,
+  PLACEHOLDER,
+  TROUBLE_HEADER,
+  cell,
+  docIsStubContent,
+  stripPlaceholderRows,
+} from '../workflow-core/docs.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.1.0';
@@ -1279,27 +1288,13 @@ function seedDoc(path, content) {
   return true;
 }
 
-const PLACEHOLDER = /_\(to be filled\)_|_\(date\)_|_\(skill or person\)_|_\(how\)_/;
-
 // A doc still untouched: either an unfilled stub (Status: TODO) or only placeholder rows.
 function docIsStub(path) {
   if (!existsSync(path)) {
     return false;
   }
   const content = readFileSync(path, 'utf8');
-  return /\*\*Status:\*\* TODO/.test(content) || PLACEHOLDER.test(content);
-}
-
-function stripPlaceholderRows(content) {
-  return content
-    .split('\n')
-    .filter((line) => !PLACEHOLDER.test(line))
-    .join('\n');
-}
-
-// Escape a value for a markdown table cell (collapse whitespace, escape pipes).
-function cell(value) {
-  return (value || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '\\|');
+  return docIsStubContent(content);
 }
 
 function appendRows(path, header, rows) {
@@ -1310,9 +1305,6 @@ function appendRows(path, header, rows) {
   const base = stripPlaceholderRows(raw).trimEnd();
   writeFileSync(path, `${base}\n${rows.join('\n')}\n`, 'utf8');
 }
-
-const DECISION_HEADER = '# Decision Log\n\n| Date | Decision | Why | Owner |\n| --- | --- | --- | --- |\n';
-const TROUBLE_HEADER = '# Troubleshooting\n\n| Symptom | Root cause | Fix | Verified |\n| --- | --- | --- | --- |\n';
 
 function todayStamp() {
   return new Date().toISOString().slice(0, 10);
@@ -1567,8 +1559,6 @@ function runLearned(args) {
   appendToDoc(path, header, `- ${todayStamp()} — ${clean(text)}\n`);
   return `Logged learning note -> ${path}\n`;
 }
-
-const OPEN_QUESTIONS_HEADER = '# Open Questions\n\n| Question | Why it matters | Status |\n| --- | --- | --- |\n';
 
 function runAsk(args) {
   const question = appendMessage(args, 'Usage: ai-pm-dev ask "<question>" [--why <reason>] [--target <path>]');

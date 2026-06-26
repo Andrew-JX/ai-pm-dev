@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { docIsStubContent } from '../../../workflow-core/docs.mjs';
 
-const placeholderPattern = /_\(to be filled\)_|_\(date\)_|_\(skill or person\)_|_\(how\)_/;
 const coreDocs = [
   { id: 'brief', title: 'Project Brief', path: 'PROJECT_BRIEF.md', phase: 'idea' },
   { id: 'scope', title: 'MVP Scope', path: 'scope.md', phase: 'scope' },
@@ -34,7 +34,7 @@ export function docStatus(path) {
     return 'missing';
   }
   const content = readText(path);
-  if (/\*\*Status:\*\* TODO/.test(content) || placeholderPattern.test(content)) {
+  if (docIsStubContent(content)) {
     return 'stub';
   }
   return content.trim().length ? 'filled' : 'stub';
