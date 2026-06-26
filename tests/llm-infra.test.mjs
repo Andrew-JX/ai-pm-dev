@@ -126,14 +126,16 @@ for (const key of ['idea', 'targetUsers', 'painPoints', 'acceptanceCriteria', 'o
 {
   let constructedWith;
   let payloadSeen;
+  let optionsSeen;
   class FakeAnthropic {
     constructor(options) {
       constructedWith = options;
       this.calls = 0;
       this.messages = {
-        create: async (payload) => {
+        create: async (payload, options) => {
           this.calls += 1;
           payloadSeen = payload;
+          optionsSeen = options;
           return {
             content: [{ type: 'text', text: '{"action":"ask"}' }],
             usage: { input_tokens: 1, output_tokens: 2 },
@@ -156,6 +158,7 @@ for (const key of ['idea', 'targetUsers', 'painPoints', 'acceptanceCriteria', 'o
   assert.equal(client.available, true);
   assert.deepEqual(constructedWith, { apiKey: 'test-key' });
   assert.equal(payloadSeen.model, COST_SENSITIVE_MODEL);
+  assert.equal(optionsSeen.signal instanceof AbortSignal, true);
   assert.equal(result.ok, true);
   assert.equal(result.text, '{"action":"ask"}');
   assert.deepEqual(result.usage, { input_tokens: 1, output_tokens: 2 });

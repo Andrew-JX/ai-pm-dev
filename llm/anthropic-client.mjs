@@ -30,12 +30,16 @@ async function withTimeout(operation, timeoutMs) {
   if (!timeoutMs) {
     return operation();
   }
+  const controller = new AbortController();
   let timeoutId;
   const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`Anthropic request timed out after ${timeoutMs}ms.`)), timeoutMs);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Anthropic request timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
   });
   try {
-    return await Promise.race([operation(), timeout]);
+    return await Promise.race([operation(controller.signal), timeout]);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -82,7 +86,7 @@ export function createAnthropicPrdClient(options = {}) {
       for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
         attempts = attempt + 1;
         try {
-          const response = await withTimeout(() => client.messages.create(payload), timeoutMs);
+          const response = await withTimeout((signal) => client.messages.create(payload, { signal }), timeoutMs);
           return {
             ok: true,
             model: payload.model,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -37,6 +37,9 @@ import {
   questionsForType,
 } from '../workflow-core/questions.mjs';
 import { buildQualityReportJson, buildQualityReportMarkdown } from '../workflow-core/quality-report.mjs';
+import { createAnthropicPrdClient } from '../llm/anthropic-client.mjs';
+import { createClarificationState, runPrdClarificationTurn } from '../llm/prd-clarifier.mjs';
+import { DEFAULT_REASONING_MODEL, resolveModelAlias } from '../llm/models.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = '1.1.1';
@@ -58,6 +61,7 @@ function printHelp() {
 Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
   ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>] [--quick]
+  ai-pm-dev prd clarify [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--model <opus|sonnet>] [--from-note <file>] [--json-turn]
   ai-pm-dev prd status [--target <path>]
   ai-pm-dev prd check [--strict] [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
@@ -1830,6 +1834,230 @@ async function runPrdInterview(args) {
   return finish(sessionPath);
 }
 
+function parsePrdModel(args) {
+  return resolveModelAlias(parseValue(args, '--model') || DEFAULT_REASONING_MODEL);
+}
+
+function createLlmRunId() {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${formatStamp(nowForSession())}-${random}`;
+}
+
+function llmRunDir(target, runId) {
+  return join(resolve(target), '.ai-pm-dev', 'llm-runs', runId);
+}
+
+function appendLlmRecord(target, runId, record) {
+  const dir = llmRunDir(target, runId);
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, 'llm-calls.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
+  return join(dir, 'llm-calls.jsonl');
+}
+
+function writeLlmRunSessionMetadata(sessionPath, runId, callsPath, status) {
+  writeFileSync(join(sessionPath, 'llm-run.json'), `${JSON.stringify({
+    runId,
+    status,
+    callsPath,
+    updatedAt: new Date().toISOString(),
+  }, null, 2)}\n`, 'utf8');
+}
+
+function activeTypeQuestions(type) {
+  return questionsForType(type || 'general');
+}
+
+function ensureClarificationState(rawState, options = {}) {
+  const state = rawState && typeof rawState === 'object'
+    ? rawState
+    : createClarificationState({
+      runId: options.runId,
+      model: options.model,
+      lang: options.lang,
+      projectType: options.projectType,
+    });
+  const draftAnswers = {
+    ...(state.draftAnswers && typeof state.draftAnswers === 'object' ? state.draftAnswers : {}),
+  };
+  if (options.idea && !draftAnswers.idea) {
+    draftAnswers.idea = options.idea;
+  }
+  return {
+    ...state,
+    runId: state.runId || options.runId || createLlmRunId(),
+    model: state.model || options.model || DEFAULT_REASONING_MODEL,
+    lang: state.lang || options.lang || 'en',
+    projectType: state.projectType || options.projectType || 'general',
+    draftAnswers,
+  };
+}
+
+function compactClarifyResult(result, extra = {}) {
+  return {
+    status: result.status,
+    reason: result.reason,
+    questions: result.questions || [],
+    answers: result.answers,
+    warnings: result.warnings || [],
+    state: result.state,
+    runId: result.state?.runId,
+    sessionPath: extra.sessionPath,
+    callsPath: extra.callsPath,
+  };
+}
+
+async function executePrdClarifyTurn({ target, type, lang, model, state, userInput, sourceNote = '', client }) {
+  const result = await runPrdClarificationTurn({
+    client,
+    state,
+    userInput,
+    lang,
+    projectType: type,
+    model,
+    now: nowForSession(),
+  });
+  const runId = result.state?.runId || state.runId || createLlmRunId();
+  const callsPath = appendLlmRecord(target, runId, result.llmRecord);
+
+  if (result.status === 'ready' || result.status === 'degraded') {
+    const { sessionPath } = writePrdAssets(target, result.answers, sourceNote, activeTypeQuestions(type));
+    writeLlmRunSessionMetadata(sessionPath, runId, callsPath, result.status);
+    return { result, sessionPath, callsPath };
+  }
+
+  return { result, callsPath };
+}
+
+function parseJsonTurnBody(args) {
+  const raw = readFileSync(0, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Usage: ai-pm-dev prd clarify --json-turn < JSON body on stdin');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON stdin for prd clarify --json-turn.');
+  }
+}
+
+function parsePrdTypeValue(value) {
+  if (value && !projectTypes.includes(value)) {
+    throw new Error(`Usage: ai-pm-dev prd clarify [--type <${projectTypes.join('|')}>]`);
+  }
+  return value || 'general';
+}
+
+function parsePrdLangValue(value) {
+  if (value && value !== 'zh' && value !== 'en') {
+    throw new Error('Usage: ai-pm-dev prd clarify [--lang <zh|en>]');
+  }
+  return value || 'en';
+}
+
+async function runPrdClarifyJsonTurn(args) {
+  const body = parseJsonTurnBody(args);
+  const target = resolve(body.target || parseTarget(args));
+  const type = parsePrdTypeValue(body.type || body.projectType || parsePrdType(args));
+  const lang = parsePrdLangValue(body.lang || parsePrdLang(args));
+  const model = resolveModelAlias(body.model || parseValue(args, '--model') || DEFAULT_REASONING_MODEL);
+  const state = ensureClarificationState(body.state, {
+    runId: body.runId,
+    model,
+    lang,
+    projectType: type,
+    idea: body.idea,
+  });
+  const client = createAnthropicPrdClient({ model });
+  const { result, sessionPath, callsPath } = await executePrdClarifyTurn({
+    target,
+    type,
+    lang,
+    model,
+    state,
+    userInput: body.userInput || '',
+    sourceNote: body.sourceNote || '',
+    client,
+  });
+  return `${JSON.stringify(compactClarifyResult(result, { sessionPath, callsPath }), null, 2)}\n`;
+}
+
+function prdClarifyCompletionMessage(target, sessionPath, result) {
+  const mode = result.status === 'degraded' ? 'AI clarification degraded to template PRD' : 'AI clarification complete';
+  const reason = result.reason ? `\nReason: ${result.reason}` : '';
+  return `\n${mode}.${reason}
+Session: ${sessionPath}
+AI-PRD: ${join(sessionPath, 'ai-prd.md')}
+LLM run: ${join(sessionPath, 'llm-run.json')}
+
+Project docs updated: ${join(target, 'docs')}
+Next: ai-pm-dev prd check
+`;
+}
+
+async function runPrdClarifyInteractive(args) {
+  const target = resolve(parseTarget(args));
+  const type = parsePrdType(args) || 'general';
+  const { note, idea: notedIdea } = parsePrdNote(args);
+  let lang = parsePrdLang(args) || 'en';
+  const model = parsePrdModel(args);
+  const client = createAnthropicPrdClient({ model });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  let state = ensureClarificationState(null, {
+    runId: createLlmRunId(),
+    model,
+    lang,
+    projectType: type,
+    idea: notedIdea,
+  });
+  let userInput = notedIdea;
+
+  try {
+    if (!parsePrdLang(args)) {
+      const chosen = (await rl.question('Language / 语言 [en/zh]: ')).trim().toLowerCase();
+      lang = chosen === 'zh' ? 'zh' : 'en';
+      state = { ...state, lang };
+    }
+    if (!userInput) {
+      userInput = (await rl.question('Product idea:\n> ')).trim();
+      state = ensureClarificationState(state, { idea: userInput, model, lang, projectType: type });
+    }
+    while (true) {
+      const { result, sessionPath } = await executePrdClarifyTurn({
+        target,
+        type,
+        lang,
+        model,
+        state,
+        userInput,
+        sourceNote: note,
+        client,
+      });
+
+      if (result.status === 'ready' || result.status === 'degraded') {
+        return prdClarifyCompletionMessage(target, sessionPath, result);
+      }
+
+      state = result.state;
+      const answers = [];
+      console.log('\nAI clarification questions:');
+      for (const question of result.questions) {
+        const answer = await rl.question(`${question}\n> `);
+        answers.push(`Q: ${question}\nA: ${answer.trim()}`);
+      }
+      userInput = answers.join('\n\n');
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+async function runPrdClarify(args) {
+  if (args.includes('--json-turn')) {
+    return runPrdClarifyJsonTurn(args);
+  }
+  return runPrdClarifyInteractive(args);
+}
+
 function runPrdStatus(args) {
   const target = resolve(parseTarget(args));
   const sessionPath = latestPrdSession(target);
@@ -1906,6 +2134,9 @@ Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: ex
 
 async function runPrd(args) {
   const [subcommand, ...rest] = args;
+  if (subcommand === 'clarify') {
+    return runPrdClarify(rest);
+  }
   if (subcommand === 'status') {
     return runPrdStatus(rest);
   }
@@ -1916,7 +2147,7 @@ async function runPrd(args) {
     return runPrdHandoff(rest);
   }
   if (subcommand && !subcommand.startsWith('-')) {
-    throw new Error('Usage: ai-pm-dev prd [--target <path>] | prd status | prd check | prd handoff --to <codex|v0|figma>');
+    throw new Error('Usage: ai-pm-dev prd [--target <path>] | prd clarify | prd status | prd check | prd handoff --to <codex|v0|figma>');
   }
   return runPrdInterview(args);
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { prdQuestions } from '../workflow-core/questions.mjs';
+import { prdQuestions, questionsForType } from '../workflow-core/questions.mjs';
 
 const llmDir = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(llmDir, '..', 'templates', 'ai-prd-schema.json');
@@ -12,10 +12,12 @@ export function loadPrdAnswerSchema() {
   return JSON.parse(readFileSync(schemaPath, 'utf8'));
 }
 
-export function normalizePrdAnswersForSchema(rawAnswers = {}) {
+export function normalizePrdAnswersForSchema(rawAnswers = {}, options = {}) {
   const warnings = [];
   const errors = [];
   const answers = {};
+  const activeKeys = new Set(questionsForType(options.projectType).map((question) => question.key));
+  const skippedFields = PRD_ANSWER_KEYS.filter((key) => !activeKeys.has(key));
 
   if (!rawAnswers || typeof rawAnswers !== 'object' || Array.isArray(rawAnswers)) {
     return {
@@ -23,6 +25,7 @@ export function normalizePrdAnswersForSchema(rawAnswers = {}) {
       warnings,
       errors: ['PRD answers must be an object.'],
       unknownFields: [],
+      skippedFields,
     };
   }
 
@@ -43,7 +46,7 @@ export function normalizePrdAnswersForSchema(rawAnswers = {}) {
     }
   }
 
-  return { answers, warnings, errors, unknownFields };
+  return { answers, warnings, errors, unknownFields, skippedFields };
 }
 
 export function validatePrdAnswers(rawAnswers, options = {}) {
@@ -71,6 +74,7 @@ export function validatePrdAnswers(rawAnswers, options = {}) {
     errors,
     warnings: normalized.warnings,
     unknownFields: normalized.unknownFields,
+    skippedFields: normalized.skippedFields,
     schemaTitle: schema.title,
   };
 }
