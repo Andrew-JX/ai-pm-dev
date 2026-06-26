@@ -39,7 +39,7 @@ import {
 import { buildQualityReportJson, buildQualityReportMarkdown } from '../workflow-core/quality-report.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const version = '1.1.0';
+const version = '1.1.1';
 const requiredSkills = [
   'prd-generator',
   'product-spec-builder',

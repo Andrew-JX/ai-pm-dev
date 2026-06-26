@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 — 2026-06-26 (Internal: workflow-core extraction)
+
+- Extract a shared `workflow-core/` module (questions, items, doc constants, PRD gate rules, quality report, installer/PR/ownership templates); the CLI and the web API now import the same rule definitions instead of duplicating them.
+- `prd check` now also writes `quality-report.json`; the web workbench reads that structured result instead of regex-parsing `quality-report.md` (shows UNKNOWN when absent).
+- Bad quick-PRD JSON stdin now fails with a clean error instead of a raw SyntaxError.
+- No user-facing behavior change: CLI stdout and generated markdown are unchanged.
+
 ## 1.1.0 — 2026-06-26 (Project Operating Layer + Quality Gate + Product Workbench)
 
 Collaboration mechanisms — close the inbound side of context and record the lifecycle:
