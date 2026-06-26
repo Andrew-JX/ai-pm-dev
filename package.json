@@ -12,6 +12,7 @@
   },
   "files": [
     "apps",
+    "llm",
     "workflow-core",
     "bin",
     "scripts",
@@ -26,7 +27,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs && node tests/config.test.mjs && node tests/prd-session.test.mjs && node tests/web-workbench.test.mjs && node tests/workflow-core-characterization.test.mjs",
+    "test": "node tests/package-metadata.test.mjs && node tests/init-ai-pm-dev.test.mjs && node tests/start-task.test.mjs && node tests/agent-cli.test.mjs && node tests/doctor-release.test.mjs && node tests/config.test.mjs && node tests/prd-session.test.mjs && node tests/web-workbench.test.mjs && node tests/workflow-core-characterization.test.mjs && node tests/llm-infra.test.mjs",
     "web": "npm run web --workspace apps/web",
     "web:build": "npm run web:build --workspace apps/web",
     "init": "node scripts/init-ai-pm-dev.mjs",
@@ -34,5 +35,8 @@
   },
   "bin": {
     "ai-pm-dev": "./bin/ai-pm-dev.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0"
   }
 }

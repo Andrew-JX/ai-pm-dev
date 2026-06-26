@@ -21,6 +21,7 @@ assert.equal(pkg.bin['ai-pm-dev'], './bin/ai-pm-dev.mjs');
 assert.equal(pkg.scripts.web, 'npm run web --workspace apps/web');
 assert.equal(pkg.scripts['web:build'], 'npm run web:build --workspace apps/web');
 assert.ok(pkg.files.includes('apps'));
+assert.ok(pkg.files.includes('llm'));
 assert.ok(pkg.files.includes('workflow-core'));
 assert.ok(pkg.files.includes('bin'));
 assert.ok(pkg.files.includes('scripts'));
