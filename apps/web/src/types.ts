@@ -62,3 +62,15 @@ export type ProjectState = {
   state: Record<string, unknown>;
   phaseOrder: string[];
 };
+
+export type ClarificationResponse = {
+  status: 'ask' | 'ready' | 'degraded';
+  reason?: string;
+  questions: string[];
+  answers?: Record<string, string>;
+  warnings: string[];
+  state: Record<string, unknown>;
+  runId?: string;
+  sessionPath?: string;
+  callsPath?: string;
+};

@@ -131,6 +131,48 @@ try {
   }
 
   {
+    const result = await runPrdClarificationTurn({
+      client: fakeClient([{ ok: false, model: 'fake-model', error: 'request timed out' }]),
+      state: createClarificationState({ runId: 'run-timeout', model: 'fake-model' }),
+      userInput: 'Timeout path idea',
+      now: new Date('2026-06-09T10:00:00.000Z'),
+    });
+
+    assert.equal(result.status, 'degraded');
+    assert.match(result.reason, /timed out/);
+    assert.equal(result.answers.idea, 'Timeout path idea');
+  }
+
+  {
+    const result = await runPrdClarificationTurn({
+      client: fakeClient(['not-json', 'still-not-json']),
+      state: createClarificationState({ runId: 'run-repair-fails', model: 'fake-model' }),
+      userInput: 'Repair failure idea',
+      now: new Date('2026-06-09T10:00:00.000Z'),
+    });
+
+    assert.equal(result.status, 'degraded');
+    assert.match(result.reason, /Invalid JSON/);
+    assert.equal(result.llmRecord.responses.length, 2);
+  }
+
+  {
+    const result = await runPrdClarificationTurn({
+      client: fakeClient([JSON.stringify({ action: 'ask', questions: ['Still missing scope?'] })]),
+      state: createClarificationState({
+        runId: 'run-limit',
+        model: 'fake-model',
+      }),
+      userInput: 'Turn limit idea',
+      maxTurns: 1,
+      now: new Date('2026-06-09T10:00:00.000Z'),
+    });
+
+    assert.equal(result.status, 'degraded');
+    assert.match(result.reason, /turn limit/);
+  }
+
+  {
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-clarify-json-'));
     tempRoots.push(target);
     const stdout = runCliJsonTurn({

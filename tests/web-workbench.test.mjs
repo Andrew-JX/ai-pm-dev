@@ -112,6 +112,42 @@ try {
     const timeline = readFileSync(join(target, '.ai-pm-dev', 'timeline.json'), 'utf8');
     assert.match(timeline, /web smoke path verified/);
   }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-clarify-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = '';
+    let clarify;
+    try {
+      clarify = await handleApiRequest({
+        method: 'POST',
+        url: '/api/prd/clarify',
+        body: JSON.stringify({
+          target,
+          idea: 'AI meeting notes assistant',
+          userInput: 'AI meeting notes assistant',
+        }),
+      });
+    } finally {
+      if (previousKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousKey;
+      }
+    }
+
+    assert.equal(clarify.status, 200);
+    assert.equal(clarify.body.clarification.status, 'degraded');
+    assert.match(clarify.body.clarification.reason, /ANTHROPIC_API_KEY/);
+    assert.equal(existsSync(clarify.body.clarification.sessionPath), true);
+    assert.equal(existsSync(clarify.body.clarification.callsPath), true);
+    assert.equal(clarify.body.project.latestSession.idea, 'AI meeting notes assistant');
+    const calls = readFileSync(clarify.body.clarification.callsPath, 'utf8');
+    assert.match(calls, /ANTHROPIC_API_KEY is not set/);
+  }
 } finally {
   for (const dir of tempRoots) {
     rmSync(dir, { recursive: true, force: true });

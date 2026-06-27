@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ArtifactSummary, ProjectState } from './types';
+import type { ArtifactSummary, ClarificationResponse, ProjectState } from './types';
 import './styles.css';
 
 const defaultTarget = new URLSearchParams(window.location.search).get('target') || '';
@@ -30,6 +30,15 @@ function gateClass(overall: string) {
   return 'muted';
 }
 
+function skippedFieldsFrom(clarification: ClarificationResponse | null) {
+  const validation = clarification?.state?.validation;
+  if (!validation || typeof validation !== 'object' || !('skippedFields' in validation)) {
+    return [];
+  }
+  const skippedFields = (validation as { skippedFields?: unknown }).skippedFields;
+  return Array.isArray(skippedFields) ? skippedFields.filter((item): item is string => typeof item === 'string') : [];
+}
+
 function App() {
   const [target, setTarget] = useState(defaultTarget);
   const [state, setState] = useState<ProjectState | null>(null);
@@ -38,6 +47,8 @@ function App() {
   const [decision, setDecision] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [clarify, setClarify] = useState<ClarificationResponse | null>(null);
+  const [clarifyAnswers, setClarifyAnswers] = useState<string[]>([]);
 
   async function loadProject(nextTarget = target) {
     setBusy('Loading project');
@@ -62,6 +73,7 @@ function App() {
     if (!state?.currentPhase) return state?.artifacts || [];
     return state.artifacts.filter((item) => item.phase === state.currentPhase?.id || ['questions', 'progress', 'decisions'].includes(item.id));
   }, [state]);
+  const skippedFields = skippedFieldsFrom(clarify);
 
   async function submitIdea(event: FormEvent) {
     event.preventDefault();
@@ -76,6 +88,62 @@ function App() {
       setState(data.project);
       setIdea('');
       setMessage(data.result.stdout || 'PRD generated');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function startClarification() {
+    if (!idea.trim()) return;
+    setBusy('Clarifying idea');
+    setMessage('');
+    try {
+      const data = await requestJson<{ project: ProjectState; clarification: ClarificationResponse }>('/api/prd/clarify', {
+        method: 'POST',
+        body: JSON.stringify({ target, idea, userInput: idea }),
+      });
+      setState(data.project);
+      setClarify(data.clarification);
+      setClarifyAnswers((data.clarification.questions || []).map(() => ''));
+      if (data.clarification.status === 'ready') {
+        setIdea('');
+        setMessage('AI clarification complete');
+      } else if (data.clarification.status === 'degraded') {
+        setIdea('');
+        setMessage(data.clarification.reason || 'AI clarification degraded to template PRD');
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function submitClarificationAnswers(event: FormEvent) {
+    event.preventDefault();
+    if (!clarify?.questions.length) return;
+    const userInput = clarify.questions
+      .map((question, index) => `Q: ${question}\nA: ${(clarifyAnswers[index] || '').trim()}`)
+      .join('\n\n');
+    setBusy('Clarifying idea');
+    setMessage('');
+    try {
+      const data = await requestJson<{ project: ProjectState; clarification: ClarificationResponse }>('/api/prd/clarify', {
+        method: 'POST',
+        body: JSON.stringify({ target, state: clarify.state, userInput }),
+      });
+      setState(data.project);
+      setClarify(data.clarification);
+      setClarifyAnswers((data.clarification.questions || []).map(() => ''));
+      if (data.clarification.status === 'ready') {
+        setIdea('');
+        setMessage('AI clarification complete');
+      } else if (data.clarification.status === 'degraded') {
+        setIdea('');
+        setMessage(data.clarification.reason || 'AI clarification degraded to template PRD');
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -182,8 +250,37 @@ function App() {
           <form className="idea-form" onSubmit={submitIdea}>
             <label htmlFor="idea">想法输入</label>
             <textarea id="idea" value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="例如：帮健身新手记录训练，并自动生成每周进展总结" />
-            <button type="submit" disabled={Boolean(busy) || !idea.trim()}>生成 Quick PRD</button>
+            <div className="form-actions">
+              <button type="button" onClick={startClarification} disabled={Boolean(busy) || !idea.trim()}>AI Clarify</button>
+              <button type="submit" disabled={Boolean(busy) || !idea.trim()}>生成 Quick PRD</button>
+            </div>
           </form>
+
+          {clarify?.status === 'ask' && (
+            <form className="clarify-form" onSubmit={submitClarificationAnswers}>
+              <div>
+                <p className="section-label">AI Clarification</p>
+                <h3>Answer these questions</h3>
+              </div>
+              {clarify.questions.map((question, index) => (
+                <label key={question} className="clarify-question">
+                  <span>{question}</span>
+                  <textarea
+                    value={clarifyAnswers[index] || ''}
+                    onChange={(event) => {
+                      const next = [...clarifyAnswers];
+                      next[index] = event.target.value;
+                      setClarifyAnswers(next);
+                    }}
+                  />
+                </label>
+              ))}
+              {skippedFields.length > 0 && (
+                <p className="muted skipped-fields">Skipped for this project type: {skippedFields.join(', ')}</p>
+              )}
+              <button type="submit" disabled={Boolean(busy)}>Continue clarification</button>
+            </form>
+          )}
 
           <div className="artifact-grid">
             {currentArtifacts.map((artifact) => (

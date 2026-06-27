@@ -46,6 +46,14 @@ async function runCli(args, input = '') {
   });
 }
 
+function parseJsonOutput(result) {
+  try {
+    return { ok: true, data: JSON.parse(result.stdout || '{}') };
+  } catch {
+    return { ok: false, error: 'CLI returned non-JSON output.' };
+  }
+}
+
 export async function handleApiRequest(request) {
   const url = new URL(request.url, 'http://localhost');
   const method = request.method.toUpperCase();
@@ -70,6 +78,34 @@ export async function handleApiRequest(request) {
     });
     const result = await runCli(['prd', '--quick', '--target', target], input);
     return json(result.ok ? 200 : 500, {
+      result,
+      project: readProjectState(target),
+    });
+  }
+
+  if (method === 'POST' && url.pathname === '/api/prd/clarify') {
+    const body = parseBody(request.body);
+    const target = resolve(body.target || process.cwd());
+    const input = JSON.stringify({
+      target,
+      state: body.state || null,
+      userInput: body.userInput || body.idea || '',
+      lang: body.lang || 'en',
+      type: body.type || body.projectType || 'general',
+      model: body.model || 'opus',
+      idea: body.idea || '',
+    });
+    const result = await runCli(['prd', 'clarify', '--json-turn', '--target', target], input);
+    const parsed = parseJsonOutput(result);
+    if (!result.ok || !parsed.ok) {
+      return json(500, {
+        error: parsed.error || result.stderr || 'PRD clarification failed',
+        result,
+        project: readProjectState(target),
+      });
+    }
+    return json(200, {
+      clarification: parsed.data,
       result,
       project: readProjectState(target),
     });

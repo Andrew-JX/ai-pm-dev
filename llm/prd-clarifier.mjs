@@ -95,6 +95,7 @@ Rules:
 function userPrompt({ state, userInput }) {
   return JSON.stringify({
     currentDraftAnswers: state.draftAnswers || {},
+    previousPendingQuestions: state.pendingQuestions || [],
     previousTurns: state.turns || [],
     latestUserInput: userInput || '',
   });
@@ -334,6 +335,7 @@ export async function runPrdClarificationTurn(options = {}) {
     schemaErrors: validation.errors,
     warnings: validation.warnings,
     unknownFields: validation.unknownFields,
+    skippedFields: validation.skippedFields,
     answerGateOverall: validation.answerScore?.overall || 'FAIL',
     failedRequired: (validation.failedRequired || []).map((check) => check.name),
   };

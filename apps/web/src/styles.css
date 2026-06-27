@@ -247,6 +247,37 @@ h3 {
   margin-bottom: -2px;
 }
 
+.form-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.clarify-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfe;
+}
+
+.clarify-question {
+  display: grid;
+  gap: 6px;
+  color: #3d4a59;
+  font-weight: 700;
+}
+
+.clarify-question textarea {
+  font-weight: 400;
+}
+
+.skipped-fields {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
 .artifact-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
