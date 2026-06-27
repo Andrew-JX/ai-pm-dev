@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 — 2026-06-28 (Phase 2: AI clarification loop)
+
+The headline feature: turn a vague idea into a gate-worthy PRD through multi-turn LLM interrogation, instead of template fill-in. This is the first time the tool calls an LLM (Anthropic).
+
+- Add `ai-pm-dev prd clarify`: an interactive, multi-turn AI clarification flow that interrogates a rough idea and converges on structured PRD answers, then writes the same PRD assets as `prd` (answers, ai-prd.md, scope, handoffs, docs, state). Default model `claude-opus-4-8`; `--model sonnet` uses `claude-sonnet-4-6` for cost-sensitive runs.
+- Gate-backed convergence: clarification keeps asking until the answers pass the same required PRD gates as `prd check` (≤3 must-haves, the one thing, a non-goal, a present success metric). The convergence check reuses `workflow-core`'s `evaluateAnswerGates` (single source of truth), so `prd clarify` never converges on a PRD that `prd check` would reject. A measurable metric is a soft target the clarifier pushes for, not a hard gate — matching `prd check`, which only warns.
+- Graceful degradation, never a hard break: with no `ANTHROPIC_API_KEY` — or on timeout, SDK error, invalid JSON, schema failure, a failed repair retry, or hitting the turn limit — `prd clarify` degrades to the existing template quick PRD and writes the reason. Existing `prd`, `prd --quick`, `prd check`, `prd status`, and `prd handoff` are unchanged.
+- Web workbench: add an AI Clarify multi-turn flow alongside the existing Quick PRD, backed by a new `/api/prd/clarify` endpoint.
+- Key stays server-side: `ANTHROPIC_API_KEY` is read only from the environment and used only in the CLI / local Node server. The web server reaches the LLM by spawning `prd clarify --json-turn` (a machine mode that emits JSON only on stdout); the browser bundle never imports the SDK and never sees the key.
+- Observability hook: every LLM call is recorded to `.ai-pm-dev/llm-runs/<runId>/llm-calls.jsonl` (prompt version, model, raw output, schema/gate validation, errors, optional token usage — never the API key or headers), including failed and degraded turns. A completed PRD session links its run via `llm-run.json`.
+- Align `templates/ai-prd-schema.json` to the 14 authoritative PRD answer keys in `workflow-core/questions.mjs` (add `oneThing`, `nonGoals`). LLM output is normalized before validation: missing fields fill to `''`, unknown fields are stripped with a warning rather than failing the turn.
+
 ## 1.1.1 — 2026-06-26 (Internal: workflow-core extraction)
 
 - Extract a shared `workflow-core/` module (questions, items, doc constants, PRD gate rules, quality report, installer/PR/ownership templates); the CLI and the web API now import the same rule definitions instead of duplicating them.

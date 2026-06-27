@@ -42,7 +42,7 @@ import { createClarificationState, runPrdClarificationTurn } from '../llm/prd-cl
 import { DEFAULT_REASONING_MODEL, resolveModelAlias } from '../llm/models.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const version = '1.1.1';
+const version = '1.2.0';
 const requiredSkills = [
   'prd-generator',
   'product-spec-builder',
