@@ -28,7 +28,12 @@ import {
   ownershipRules,
   ruleMatchesPath,
 } from '../workflow-core/ownership.mjs';
-import { evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import {
+  buildBuildHandoff,
+  buildDevPlanMarkdown,
+  validateDevPlanStructure,
+} from '../workflow-core/dev-plan.mjs';
+import { evaluateDevPlan, evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import {
   parseQuickPrdStdin,
   prdQuestions,
@@ -65,6 +70,9 @@ Usage:
   ai-pm-dev prd status [--target <path>]
   ai-pm-dev prd check [--strict] [--target <path>]
   ai-pm-dev prd handoff --to <codex|v0|figma> [--target <path>]
+  ai-pm-dev plan materialize [--target <path>] < dev-plan.json
+  ai-pm-dev plan check [--strict] [--target <path>]
+  ai-pm-dev plan handoff [--target <path>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
   ai-pm-dev decision-record "<title>" [--why <reason>] [--goals <goals>] [--non-goals <non-goals>] [--test <plan>] [--rollback <plan>] [--target <path>]
@@ -96,6 +104,7 @@ Usage:
 Commands:
   init           Install workflow files into a target project.
   prd            Run an interactive PM interview and generate AI-PRD assets.
+  plan           Materialize, check, or print the latest PRD-linked dev plan.
   start          Route a task, generate the AI prompt, and optionally save task state.
   decide         Append a one-line decision to docs/decision-log.md.
   decision-record Write a KEP-lite decision record for a larger change.
@@ -2132,6 +2141,176 @@ Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: ex
 `;
 }
 
+function loadLatestPrdSession(target) {
+  const sessionPath = latestPrdSession(target);
+  if (!sessionPath) {
+    throw new Error(`No PRD sessions found for ${target}. Run: ai-pm-dev prd --target "${target}"`);
+  }
+  const answers = JSON.parse(readFileSync(join(sessionPath, 'answers.json'), 'utf8'));
+  return { sessionPath, answers };
+}
+
+function readDevPlanStdin() {
+  const raw = readFileSync(0, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Usage: ai-pm-dev plan materialize [--target <path>] < dev-plan.json');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON stdin for plan materialize.');
+  }
+}
+
+function prdAnchoredPlan(plan, answers, sessionPath) {
+  return {
+    ...plan,
+    prdSessionPath: sessionPath,
+    idea: answers.idea || '',
+    oneThing: answers.oneThing || '',
+    mustHaves: listItems(answers.mvpScope).slice(0, 3),
+    nonGoals: listItems(answers.nonGoals),
+    acceptanceCriteria: answers.acceptanceCriteria || '',
+  };
+}
+
+function requireDevPlanStructure(raw) {
+  const validation = validateDevPlanStructure(raw);
+  if (!validation.ok) {
+    throw new Error(`Invalid dev plan structure:\n- ${validation.errors.join('\n- ')}`);
+  }
+  return validation.plan;
+}
+
+function checkLines(checks) {
+  return checks.map((check) => {
+    const status = check.pass ? 'PASS' : (check.severity === 'required' ? 'FAIL' : 'WARN');
+    return `${status.padEnd(4)} ${check.name}${check.pass ? '' : ` 鈥?${check.hint}`}`;
+  });
+}
+
+function runPlanMaterialize(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const rawPlan = readDevPlanStdin();
+  const plan = prdAnchoredPlan(requireDevPlanStructure(rawPlan), answers, sessionPath);
+  const devPlanJson = `${JSON.stringify(plan, null, 2)}\n`;
+  const devPlanMarkdown = buildDevPlanMarkdown(plan);
+  const buildHandoff = buildBuildHandoff(plan);
+  const docsDir = join(target, 'docs');
+  const memoryDir = join(target, 'memory');
+  const stateDir = join(target, '.ai-pm-dev');
+  const devPlanJsonPath = join(sessionPath, 'dev-plan.json');
+  const devPlanMarkdownPath = join(sessionPath, 'dev-plan.md');
+  const buildHandoffPath = join(sessionPath, 'handoff-build.md');
+  const projectDevPlanPath = join(docsDir, 'dev-plan.md');
+  const promptPath = join(memoryDir, 'current-task-prompt.md');
+  const statePath = join(stateDir, 'state.json');
+
+  mkdirSync(docsDir, { recursive: true });
+  mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(devPlanJsonPath, devPlanJson, 'utf8');
+  writeFileSync(devPlanMarkdownPath, devPlanMarkdown, 'utf8');
+  writeFileSync(buildHandoffPath, buildHandoff, 'utf8');
+  writeFileSync(projectDevPlanPath, devPlanMarkdown, 'utf8');
+  writeFileSync(promptPath, buildHandoff, 'utf8');
+  writeFileSync(statePath, `${JSON.stringify({
+    version,
+    task: plan.idea || plan.goal,
+    skill: 'dev-planner',
+    phase: 'Dev Plan',
+    skillPath: 'skills/dev-planner/SKILL.md',
+    nextStep: 'Run ai-pm-dev plan check --strict, then build from handoff-build.md.',
+    prdSessionPath: sessionPath,
+    updatedAt: new Date().toISOString(),
+  }, null, 2)}\n`, 'utf8');
+  appendCheckpoint(target, 'plan', plan.goal || plan.idea);
+
+  return `Dev plan materialized
+
+Session: ${sessionPath}
+Artifacts:
+- ${devPlanJsonPath}
+- ${devPlanMarkdownPath}
+- ${buildHandoffPath}
+- ${projectDevPlanPath}
+
+Next: ai-pm-dev plan check --strict --target "${target}"
+`;
+}
+
+function loadLatestDevPlan(target) {
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const devPlanJsonPath = join(sessionPath, 'dev-plan.json');
+  if (!existsSync(devPlanJsonPath)) {
+    throw new Error(`No dev plan found for latest PRD session. Run: ai-pm-dev plan materialize --target "${target}" < dev-plan.json`);
+  }
+  const plan = requireDevPlanStructure(JSON.parse(readFileSync(devPlanJsonPath, 'utf8')));
+  return { sessionPath, answers, plan };
+}
+
+function runPlanCheck(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers, plan } = loadLatestDevPlan(target);
+  const checks = evaluateDevPlan(plan, { sessionPath, latestSessionPath: sessionPath, answers });
+  const score = scoreChecks(checks);
+  const reportPath = join(sessionPath, 'dev-plan-quality-report.md');
+  const reportJsonPath = join(sessionPath, 'dev-plan-quality-report.json');
+  const report = buildQualityReportMarkdown(plan, checks, score, {
+    title: 'Dev Plan Quality Report',
+    generatedBy: 'ai-pm-dev plan check',
+  });
+  writeFileSync(reportPath, report, 'utf8');
+  writeFileSync(reportJsonPath, `${JSON.stringify(buildQualityReportJson(plan, checks, score, {
+    generatedBy: 'ai-pm-dev plan check',
+    idea: plan.idea,
+    sessionPath,
+  }), null, 2)}\n`, 'utf8');
+
+  const strict = args.includes('--strict');
+  if (strict && score.overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  return `Dev Plan Quality Check${strict ? ' (strict)' : ''}
+
+Session: ${sessionPath}
+Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
+
+${checkLines(checks).join('\n')}
+
+Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: exiting non-zero because required checks failed.' : ''}
+`;
+}
+
+function runPlanHandoff(args) {
+  const target = resolve(parseTarget(args));
+  const sessionPath = latestPrdSession(target);
+  if (!sessionPath) {
+    throw new Error(`No PRD sessions found for ${target}. Run: ai-pm-dev prd --target "${target}"`);
+  }
+  const handoffPath = join(sessionPath, 'handoff-build.md');
+  if (!existsSync(handoffPath)) {
+    throw new Error(`No build handoff found for latest PRD session. Run: ai-pm-dev plan materialize --target "${target}" < dev-plan.json`);
+  }
+  return readFileSync(handoffPath, 'utf8');
+}
+
+function runPlan(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'materialize') {
+    return runPlanMaterialize(rest);
+  }
+  if (subcommand === 'check') {
+    return runPlanCheck(rest);
+  }
+  if (subcommand === 'handoff') {
+    return runPlanHandoff(rest);
+  }
+  throw new Error('Usage: ai-pm-dev plan materialize [--target <path>] < dev-plan.json | plan check [--strict] [--target <path>] | plan handoff [--target <path>]');
+}
+
 async function runPrd(args) {
   const [subcommand, ...rest] = args;
   if (subcommand === 'clarify') {
@@ -2196,6 +2375,8 @@ try {
     process.stdout.write(runInit(args));
   } else if (command === 'prd') {
     process.stdout.write(await runPrd(args));
+  } else if (command === 'plan') {
+    process.stdout.write(runPlan(args));
   } else if (command === 'start') {
     process.stdout.write(runStart(args));
   } else if (command === 'decide') {
