@@ -88,3 +88,46 @@ Use these guardrails before handing a plan to an AI coding tool:
 4. Define the human-owned decisions separately from AI-executable work: data model, permissions, destructive changes, security boundaries, migrations, external costs, and release/rollback choices need human confirmation.
 5. State the verification command or manual flow before implementation starts. A slice without a verification path is not ready.
 6. For larger or risky changes, require `ai-pm-dev decision-record "<title>"` before build work begins, including docs update, verification, and rollback notes.
+
+## AI PM Dev Materialization Contract
+
+When this skill is used after an `ai-pm-dev prd` session, the host agent owns the reasoning and `ai-pm-dev` owns deterministic materialization and gates. Do not call an LLM API from `ai-pm-dev` for this stage.
+
+1. Read the latest PRD session plus `docs/scope.md`, `docs/acceptance-tests.md`, and `docs/open-questions.md`.
+2. Produce a dev-plan JSON object with this shape:
+
+```json
+{
+  "goal": "Build the smallest MVP slice that proves the PRD.",
+  "constraints": ["Project constraints that the build plan must obey."],
+  "currentState": ["Repo or product facts observed before planning."],
+  "technicalApproach": "Implementation approach grounded in the current codebase.",
+  "slices": [
+    {
+      "id": "slice-1",
+      "title": "First vertical slice",
+      "mappedMustHaves": ["Exact PRD must-have text or a meaningful snippet."],
+      "provesOneThing": "Exact PRD oneThing text or a meaningful snippet.",
+      "summary": "What this slice builds end to end.",
+      "plannedFiles": ["path/to/file"],
+      "verification": "Command or manual flow proving this slice is done.",
+      "humanDecisions": ["Decisions the user must own before implementation."],
+      "docsUpdates": ["Docs that should be updated after the slice."],
+      "risks": ["Risk or guardrail for this slice."],
+      "splitReason": "Required only when plannedFiles has more than 5 entries."
+    }
+  ],
+  "excludedNonGoals": ["Exact PRD non-goal text or a meaningful snippet."],
+  "openQuestions": ["Questions that still block implementation."]
+}
+```
+
+3. Materialize and gate it:
+
+```sh
+ai-pm-dev plan materialize --target <project> < dev-plan.json
+ai-pm-dev plan check --strict --target <project>
+ai-pm-dev plan handoff --target <project>
+```
+
+The gate must fail if every PRD must-have is not mapped, the first slice does not prove the one thing, PRD non-goals are not explicitly excluded, a slice has no verification, or a slice touches more than 5 files without a split reason.

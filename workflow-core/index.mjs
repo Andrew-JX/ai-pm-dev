@@ -1,4 +1,5 @@
 export * from './docs.mjs';
+export * from './dev-plan.mjs';
 export * from './installers.mjs';
 export * from './items.mjs';
 export * from './ownership.mjs';

@@ -1,5 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import {
+  excludedNonGoalText,
+  mappedMustHaveText,
+  prdMustHaveItems,
+  prdNonGoalItems,
+} from './dev-plan.mjs';
 import { countItems, listItems } from './items.mjs';
 
 function normalizeForSearch(value) {
@@ -119,6 +125,70 @@ export const PRD_GATE_RULES = [
   ),
 ];
 
+export const DEV_PLAN_GATE_RULES = [
+  required('answers', 'dev-plan-slices-present', 'Dev plan has at least one slice', (ctx) => ctx.plan.slices.length > 0, 'Add at least one vertical implementation slice.'),
+  required(
+    'answers',
+    'dev-plan-first-slice-proves-one-thing',
+    'First slice proves the one thing',
+    (ctx) => ctx.plan.slices.length > 0 && includesMeaningfulSnippet(ctx.plan.slices[0].provesOneThing, ctx.text('oneThing')),
+    'Make the first slice explicitly prove the PRD one thing.',
+  ),
+  required(
+    'answers',
+    'dev-plan-maps-must-haves',
+    'Every PRD must-have maps to a slice',
+    (ctx) => allSnippetsPresent(mappedMustHaveText(ctx.plan), prdMustHaveItems(ctx.answers)),
+    'Map every PRD must-have into at least one dev-plan slice.',
+  ),
+  required(
+    'answers',
+    'dev-plan-excludes-non-goals',
+    'PRD non-goals stay excluded',
+    (ctx) => allSnippetsPresent(excludedNonGoalText(ctx.plan), prdNonGoalItems(ctx.answers)),
+    'Copy every PRD non-goal into excludedNonGoals so build work does not expand v1.',
+  ),
+  required(
+    'answers',
+    'dev-plan-slices-have-verification',
+    'Every slice has verification',
+    (ctx) => ctx.plan.slices.length > 0 && ctx.plan.slices.every((slice) => slice.verification.trim().length > 0),
+    'Each slice needs a command, test, or manual flow that proves it is done.',
+  ),
+  required(
+    'answers',
+    'dev-plan-slices-small-enough',
+    'Slices stay reviewable',
+    (ctx) => ctx.plan.slices.every((slice) => slice.plannedFiles.length <= 5 || slice.splitReason.trim().length > 0),
+    'Slices touching more than 5 files need a splitReason.',
+  ),
+  required('project', 'dev-plan-latest-prd-session-exists', 'Latest PRD session exists', (ctx) => Boolean(ctx.latestSessionPath), 'Run ai-pm-dev prd before materializing a dev plan.'),
+  required(
+    'project',
+    'dev-plan-linked-to-latest-prd',
+    'Dev plan source is latest PRD',
+    (ctx) => Boolean(ctx.latestSessionPath) && ctx.plan.prdSessionPath === ctx.latestSessionPath,
+    'Regenerate the dev plan from the latest PRD session.',
+  ),
+  required('project', 'dev-plan-session-json-exists', 'Session dev-plan.json exists', (ctx) => ctx.exists(ctx.devPlanJsonPath), 'Run ai-pm-dev plan materialize.'),
+  required('project', 'dev-plan-session-markdown-exists', 'Session dev-plan.md exists', (ctx) => ctx.exists(ctx.devPlanMarkdownPath), 'Run ai-pm-dev plan materialize.'),
+  required('project', 'dev-plan-project-doc-exists', 'Project docs/dev-plan.md exists', (ctx) => ctx.exists(ctx.projectDevPlanPath), 'Run ai-pm-dev plan materialize.'),
+  required('project', 'dev-plan-build-handoff-exists', 'Build handoff exists', (ctx) => ctx.exists(ctx.buildHandoffPath), 'Run ai-pm-dev plan materialize.'),
+  required(
+    'project',
+    'dev-plan-handoff-references-sources',
+    'Build handoff references PRD and dev plan sources',
+    (ctx) => {
+      if (!ctx.exists(ctx.buildHandoffPath)) {
+        return true;
+      }
+      const content = ctx.readFile(ctx.buildHandoffPath);
+      return /ai-prd\.md/.test(content) && /scope\.md/.test(content) && /acceptance-tests\.md/.test(content) && /dev-plan\.md/.test(content);
+    },
+    'handoff-build.md must reference ai-prd.md, scope.md, acceptance-tests.md, and dev-plan.md.',
+  ),
+];
+
 function buildPrdContext(answers, context = {}, options = {}) {
   const resolved = resolveContext(context);
   const includeProjectState = options.includeProjectState ?? true;
@@ -144,6 +214,32 @@ function buildPrdContext(answers, context = {}, options = {}) {
   };
 }
 
+function buildDevPlanContext(plan, context = {}, options = {}) {
+  const resolved = resolveContext(context);
+  const includeProjectState = options.includeProjectState ?? true;
+  const answers = context.answers || {};
+  const text = (key) => (answers[key] || '').trim();
+  const latestSessionPath = context.latestSessionPath || resolved.sessionPath || '';
+  const devPlanJsonPath = join(resolved.sessionPath, 'dev-plan.json');
+  const devPlanMarkdownPath = join(resolved.sessionPath, 'dev-plan.md');
+  const buildHandoffPath = join(resolved.sessionPath, 'handoff-build.md');
+  const projectDevPlanPath = join(resolved.docsDir, 'dev-plan.md');
+  return {
+    ...resolved,
+    answers,
+    plan,
+    text,
+    latestSessionPath,
+    devPlanJsonPath,
+    devPlanMarkdownPath,
+    buildHandoffPath,
+    projectDevPlanPath,
+    devPlanMarkdown: includeProjectState ? resolved.readIfExists(devPlanMarkdownPath) : '',
+    buildHandoff: includeProjectState ? resolved.readIfExists(buildHandoffPath) : '',
+    projectDevPlan: includeProjectState ? resolved.readIfExists(projectDevPlanPath) : '',
+  };
+}
+
 function evaluateRules(rules, ctx) {
   return rules.map((rule) => {
     const pass = rule.predicate(ctx);
@@ -159,6 +255,10 @@ export function evaluatePrd(answers, context) {
 export function evaluateAnswerGates(answers) {
   const rules = PRD_GATE_RULES.filter((rule) => rule.scope === 'answers' && rule.severity === 'required');
   return evaluateRules(rules, buildPrdContext(answers, {}, { includeProjectState: false }));
+}
+
+export function evaluateDevPlan(plan, context = {}) {
+  return evaluateRules(DEV_PLAN_GATE_RULES, buildDevPlanContext(plan, context));
 }
 
 export function scoreChecks(checks) {
