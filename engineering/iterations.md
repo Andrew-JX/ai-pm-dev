@@ -216,3 +216,40 @@ Hypothesis tested:
 Result:
 - Validated by characterization tests, full `npm test`, and `npm run web:build`. This
   created the stable base for later cleanup and documentation structure work.
+
+## v1.2.0 - Phase 2: AI Clarification Loop
+
+Delivered (3 reviewer-audited batches, all gates and builds green):
+- `llm/` infrastructure: Anthropic SDK wrapper (env-only key, timeout + AbortController,
+  retry, injectable/mockable SDK), model constants (`claude-opus-4-8` default,
+  `claude-sonnet-4-6` cost path), schema normalize/validate helpers.
+- `ai-pm-dev prd clarify` (interactive) and `prd clarify --json-turn` (pure-JSON stdout
+  machine mode for the web), reusing `writePrdAssets()` with no second write path.
+- Gate-backed convergence reusing `workflow-core`'s `evaluateAnswerGates` (single source of
+  truth; clarification never converges on a PRD that `prd check` would reject). A measurable
+  metric is a soft target, not a hard gate, matching `prd check`.
+- Graceful degradation to the template quick PRD without a key, or on timeout / SDK error /
+  invalid JSON / schema failure / failed repair retry / turn-limit.
+- Per-turn record hook `.ai-pm-dev/llm-runs/<runId>/llm-calls.jsonl` (incl. failed/degraded
+  turns; never the key or headers); web `/api/prd/clarify` + AI Clarify UI; schema aligned to
+  the 14 authoritative answer keys.
+
+Hypothesis tested:
+- That the product differentiator is a standalone, system-owned AI clarification loop that
+  turns a vague idea into a gate-worthy PRD on its own API key.
+
+Result:
+- Engineering: shipped and audited clean (pinned-SHA review of `6c01139` / `d1237e2` /
+  `3141f0a`, full `npm test` + `npm run web:build`, no key/SDK leak in the web bundle).
+- Product hypothesis: **disproved for the real audience.** Review established that everyone who
+  would use `ai-pm-dev` is already inside a code agent (Claude Code / Codex / domestic agents
+  like workbuddy), which clarifies better than a blind standalone loop — full context, no
+  double billing. The differentiator is the discipline + artifacts + gate ridden on top of any
+  agent, not "an AI that asks questions." Recorded in ADR-005: ai-pm-dev is agent-native;
+  `prd clarify` is demoted to web/headless/no-agent surfaces; investment moves to extending the
+  delivery chain past the PRD (the "A" direction). The v1.2.0 substrate
+  (`evaluateAnswerGates`, schema/validation helpers, artifact writers, `llm-runs` record hook)
+  is retained and reused for those stages.
+- Process lesson (this counts as a deliverable): a shipped, technically-clean feature can still
+  rest on a wrong product premise. The cheap correction was a single direction conversation,
+  not more code — exactly the kind of dev-process learning ai-pm-dev itself should capture.
