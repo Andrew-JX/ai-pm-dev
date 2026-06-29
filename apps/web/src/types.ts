@@ -50,6 +50,7 @@ export type ProjectState = {
   phases: PhaseStatus[];
   artifacts: ArtifactSummary[];
   qualityGate: QualityGateResult;
+  devPlanGate: QualityGateResult;
   openQuestions: string;
   decisions: string;
   progress: string;

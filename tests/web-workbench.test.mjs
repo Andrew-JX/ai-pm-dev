@@ -25,6 +25,62 @@ function runCli(args, options = {}) {
 
 const tempRoots = [];
 
+function fullPrdInput() {
+  return `${[
+    'AI fitness logging tool',
+    'Fitness beginners',
+    'They cannot tell whether training improves',
+    'Scattered notes',
+    'Log workout, review progress, receive AI summary',
+    'Workout logging; progress trend; weekly summary',
+    'Workout logging',
+    'No social features in v1; no medical advice',
+    'Sets, reps, weight',
+    'Volume must be deterministic',
+    'AI only summarizes',
+    'Show the workouts used',
+    'Protect health data',
+    'A beginner understands weekly progress within five minutes',
+  ].join('\n')}\n`;
+}
+
+function validDevPlanInput() {
+  return `${JSON.stringify({
+    goal: 'Build the smallest fitness logging MVP',
+    constraints: ['Keep AI inside summaries'],
+    currentState: ['PRD complete'],
+    technicalApproach: 'Use deterministic workout calculations and the existing app shell.',
+    slices: [
+      {
+        id: 'slice-1',
+        title: 'Workout logging',
+        mappedMustHaves: ['Workout logging'],
+        provesOneThing: 'Workout logging',
+        summary: 'Create the entry-to-value logging path.',
+        plannedFiles: ['src/app.ts', 'src/workouts.ts'],
+        verification: 'npm test and manual workout logging smoke',
+        humanDecisions: ['Confirm logged workout fields'],
+        docsUpdates: ['docs/dev-plan.md'],
+        risks: ['Protect health data'],
+      },
+      {
+        id: 'slice-2',
+        title: 'Progress trend and weekly summary',
+        mappedMustHaves: ['progress trend', 'weekly summary'],
+        provesOneThing: 'Workout logging remains the anchor',
+        summary: 'Add the remaining PRD must-haves after logging works.',
+        plannedFiles: ['src/summary.ts'],
+        verification: 'npm test summary',
+        humanDecisions: [],
+        docsUpdates: [],
+        risks: [],
+      },
+    ],
+    excludedNonGoals: ['No social features in v1', 'no medical advice'],
+    openQuestions: [],
+  })}\n`;
+}
+
 try {
   {
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-empty-'));
@@ -111,6 +167,40 @@ try {
     assert.equal(checkpoint.status, 200);
     const timeline = readFileSync(join(target, '.ai-pm-dev', 'timeline.json'), 'utf8');
     assert.match(timeline, /web smoke path verified/);
+  }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-plan-'));
+    tempRoots.push(target);
+    runCli(['prd', '--target', target], { input: fullPrdInput() });
+    runCli(['prd', 'check', '--target', target]);
+
+    const beforePlan = readProjectState(target);
+    assert.equal(beforePlan.qualityGate.overall, 'PASS');
+    assert.equal(beforePlan.devPlanGate.overall, 'UNKNOWN');
+    assert.equal(beforePlan.phases.find((phase) => phase.id === 'plan')?.status, 'current');
+    assert.match(beforePlan.nextAction.command, /dev-planner/);
+    assert.match(beforePlan.nextAction.command, /ai-pm-dev plan materialize/);
+    assert.match(beforePlan.nextAction.command, /ai-pm-dev plan check --strict/);
+
+    runCli(['plan', 'materialize', '--target', target], { input: validDevPlanInput() });
+    runCli(['plan', 'check', '--strict', '--target', target]);
+
+    const afterPlan = readProjectState(target);
+    assert.equal(afterPlan.devPlanGate.overall, 'PASS');
+    assert.equal(afterPlan.phases.find((phase) => phase.id === 'plan')?.status, 'done');
+    assert.equal(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan')?.status, 'filled');
+    assert.equal(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan-gate-report')?.status, 'filled');
+    assert.match(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan')?.preview || '', /Dev Plan: AI fitness logging tool/);
+
+    const project = await handleApiRequest({
+      method: 'GET',
+      url: `/api/project?target=${encodeURIComponent(target)}`,
+      body: '',
+    });
+    assert.equal(project.status, 200);
+    assert.equal(project.body.devPlanGate.overall, 'PASS');
+    assert.equal(project.body.artifacts.find((artifact) => artifact.id === 'dev-plan')?.status, 'filled');
   }
 
   {

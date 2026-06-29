@@ -76,6 +76,7 @@ function latestSession(target) {
     idea: answers.idea || '',
     answers,
     qualityReportJson: readJson(join(path, 'quality-report.json')),
+    devPlanQualityReportJson: readJson(join(path, 'dev-plan-quality-report.json')),
   };
 }
 
@@ -110,7 +111,7 @@ function phaseStatuses(target, session, artifacts, qualityGate) {
     { id: 'prd', label: 'PRD', done: Boolean(session) },
     { id: 'scope', label: 'MVP Scope', done: filled.has('scope') },
     { id: 'ui', label: 'UI Spec', done: filled.has('ui') },
-    { id: 'plan', label: 'Dev Plan', done: /plan|planner/i.test(state.skill || state.phase || '') },
+    { id: 'plan', label: 'Dev Plan', done: filled.has('plan') || /plan|planner/i.test(state.skill || state.phase || '') },
     { id: 'build', label: 'Build', done: filled.has('build') || /build|builder/i.test(state.skill || state.phase || '') },
     { id: 'test', label: 'Test / Release', done: qualityGate.overall === 'PASS' },
   ];
@@ -125,7 +126,7 @@ function deriveCurrentPhase(phases) {
   return phases.find((phase) => phase.status === 'current') || phases.at(-1);
 }
 
-function deriveNextAction(projectInitialized, session, qualityGate, currentPhase) {
+function deriveNextAction(projectInitialized, session, qualityGate, hasDevPlan) {
   if (!projectInitialized) {
     return {
       label: 'Initialize project',
@@ -154,10 +155,32 @@ function deriveNextAction(projectInitialized, session, qualityGate, currentPhase
       detail: 'Fix scope, acceptance, or handoff drift before implementation.',
     };
   }
+  if (qualityGate.overall === 'PASS' && !hasDevPlan) {
+    return {
+      label: 'Plan in your code agent',
+      command: 'dev-planner -> ai-pm-dev plan materialize -> ai-pm-dev plan check --strict',
+      detail: 'Open your code agent, run the dev-planner skill, materialize its JSON plan with the CLI, then run the strict plan gate.',
+    };
+  }
   return {
     label: 'Continue phase',
-    command: `ai-pm-dev checkpoint "${currentPhase?.id || 'build'}"`,
+    command: 'ai-pm-dev checkpoint "build"',
     detail: 'Record the next verified movement in the project timeline.',
+  };
+}
+
+function artifactSummary({ id, title, path, relativePath, phase }) {
+  const content = readText(path);
+  return {
+    id,
+    title,
+    path,
+    relativePath,
+    phase,
+    status: docStatus(path),
+    updatedAt: existsSync(path) ? statSync(path).mtime.toISOString() : '',
+    heading: firstMarkdownHeading(content),
+    preview: preview(content),
   };
 }
 
@@ -165,27 +188,39 @@ export function readProjectState(targetInput = process.cwd()) {
   const target = resolve(targetInput || process.cwd());
   const projectInitialized = existsSync(join(target, 'AGENTS.md')) || existsSync(join(target, '.ai-pm-dev'));
   const docsRoot = join(target, 'docs');
-  const artifacts = coreDocs.map((doc) => {
-    const fullPath = join(docsRoot, doc.path);
-    const content = readText(fullPath);
-    return {
-      id: doc.id,
-      title: doc.title,
-      path: fullPath,
-      relativePath: `docs/${doc.path}`,
-      phase: doc.phase,
-      status: docStatus(fullPath),
-      updatedAt: existsSync(fullPath) ? statSync(fullPath).mtime.toISOString() : '',
-      heading: firstMarkdownHeading(content),
-      preview: preview(content),
-    };
-  });
   const session = latestSession(target);
+  const artifacts = coreDocs.map((doc) => artifactSummary({
+    id: doc.id,
+    title: doc.title,
+    path: join(docsRoot, doc.path),
+    relativePath: `docs/${doc.path}`,
+    phase: doc.phase,
+  }));
+  if (session) {
+    artifacts.push(
+      artifactSummary({
+        id: 'dev-plan',
+        title: 'Dev Plan',
+        path: join(session.path, 'dev-plan.md'),
+        relativePath: `.ai-pm-dev/prd-sessions/${session.name}/dev-plan.md`,
+        phase: 'plan',
+      }),
+      artifactSummary({
+        id: 'dev-plan-gate-report',
+        title: 'Dev Plan Gate Report',
+        path: join(session.path, 'dev-plan-quality-report.json'),
+        relativePath: `.ai-pm-dev/prd-sessions/${session.name}/dev-plan-quality-report.json`,
+        phase: 'plan',
+      }),
+    );
+  }
   const state = readJson(join(target, '.ai-pm-dev', 'state.json')) || {};
   const qualityGate = session?.qualityReportJson || unknownQualityGate();
+  const devPlanGate = session?.devPlanQualityReportJson || unknownQualityGate();
+  const hasDevPlan = artifacts.some((artifact) => artifact.id === 'dev-plan' && artifact.status === 'filled');
   const phases = phaseStatuses(target, session, artifacts, qualityGate);
   const currentPhase = deriveCurrentPhase(phases);
-  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, currentPhase);
+  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, hasDevPlan);
 
   return {
     target,
@@ -200,6 +235,7 @@ export function readProjectState(targetInput = process.cwd()) {
     phases,
     artifacts,
     qualityGate,
+    devPlanGate,
     openQuestions: artifacts.find((item) => item.id === 'questions')?.preview || '',
     decisions: artifacts.find((item) => item.id === 'decisions')?.preview || '',
     progress: artifacts.find((item) => item.id === 'progress')?.preview || '',

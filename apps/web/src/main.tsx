@@ -319,12 +319,30 @@ function App() {
 
           <section className="panel">
             <p className="section-label">质量门禁</p>
+            <h3>PRD Gate</h3>
             <div className="gate-score">
               <span>Required {state?.qualityGate.requiredPass || 0}/{state?.qualityGate.requiredTotal || 0}</span>
               <span>Recommended {state?.qualityGate.recommendedPass || 0}/{state?.qualityGate.recommendedTotal || 0}</span>
             </div>
             <ul className="check-list">
               {(state?.qualityGate.checks || []).slice(0, 5).map((check) => (
+                <li key={check.name} className={check.status.toLowerCase()}>{check.name}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="panel">
+            <p className="section-label">Dev Plan Gate</p>
+            <div className={`gate ${gateClass(state?.devPlanGate.overall || 'UNKNOWN')}`}>
+              <span>Plan Gate</span>
+              <strong>{state?.devPlanGate.overall || 'UNKNOWN'}</strong>
+            </div>
+            <div className="gate-score">
+              <span>Required {state?.devPlanGate.requiredPass || 0}/{state?.devPlanGate.requiredTotal || 0}</span>
+              <span>Recommended {state?.devPlanGate.recommendedPass || 0}/{state?.devPlanGate.recommendedTotal || 0}</span>
+            </div>
+            <ul className="check-list">
+              {(state?.devPlanGate.checks || []).slice(0, 5).map((check) => (
                 <li key={check.name} className={check.status.toLowerCase()}>{check.name}</li>
               ))}
             </ul>
