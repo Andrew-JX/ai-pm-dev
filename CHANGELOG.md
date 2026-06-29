@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 — 2026-06-29 (A: Dev Plan stage)
+
+Extend the delivery chain from gate-worthy PRD to a deterministic, reviewable MVP build plan.
+
+- Add `ai-pm-dev plan materialize`, `ai-pm-dev plan check`, and `ai-pm-dev plan handoff`: host agents run the `dev-planner` skill and produce JSON; the CLI deterministically anchors it to the latest PRD session, writes `dev-plan.json`, `dev-plan.md`, `handoff-build.md`, and project `docs/dev-plan.md`, then gates it.
+- Keep the stage agent-native: no browser-side planning, no new LLM path, and no hidden network or key flow. The host code agent owns reasoning; the CLI owns materialization, reports, state advancement, and handoff files.
+- Reuse the same `workflow-core` gate/report system for dev plans: every PRD must-have must map to a slice, the first slice must prove the one thing, PRD non-goals must stay excluded, every slice needs verification, and slices touching more than five files need a split reason.
+- Add strict plan gating and reports: `plan check --strict` exits non-zero on required failures and writes `dev-plan-quality-report.md` / `dev-plan-quality-report.json`.
+- Add read-only Web visibility for the Dev Plan stage: the workbench displays `dev-plan.md`, the Dev Plan Gate from CLI-written `dev-plan-quality-report.json`, and after PRD PASS points the next action back to the code agent (`dev-planner -> plan materialize -> plan check --strict`).
+
 ## 1.2.0 — 2026-06-28 (Phase 2: AI clarification loop)
 
 The headline feature: turn a vague idea into a gate-worthy PRD through multi-turn LLM interrogation, instead of template fill-in. This is the first time the tool calls an LLM (Anthropic).

@@ -126,7 +126,7 @@ function deriveCurrentPhase(phases) {
   return phases.find((phase) => phase.status === 'current') || phases.at(-1);
 }
 
-function deriveNextAction(projectInitialized, session, qualityGate, hasDevPlan) {
+function deriveNextAction(projectInitialized, session, qualityGate, currentPhase, hasDevPlan) {
   if (!projectInitialized) {
     return {
       label: 'Initialize project',
@@ -164,7 +164,7 @@ function deriveNextAction(projectInitialized, session, qualityGate, hasDevPlan) 
   }
   return {
     label: 'Continue phase',
-    command: 'ai-pm-dev checkpoint "build"',
+    command: `ai-pm-dev checkpoint "${currentPhase?.id || 'build'}"`,
     detail: 'Record the next verified movement in the project timeline.',
   };
 }
@@ -220,7 +220,7 @@ export function readProjectState(targetInput = process.cwd()) {
   const hasDevPlan = artifacts.some((artifact) => artifact.id === 'dev-plan' && artifact.status === 'filled');
   const phases = phaseStatuses(target, session, artifacts, qualityGate);
   const currentPhase = deriveCurrentPhase(phases);
-  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, hasDevPlan);
+  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, currentPhase, hasDevPlan);
 
   return {
     target,

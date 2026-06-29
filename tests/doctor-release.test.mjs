@@ -88,10 +88,10 @@ try {
 
   {
     const output = runNpm(['pack', '--dry-run']);
-    assert.match(output, /ai-pm-dev-1\.2\.0\.tgz/);
+    assert.match(output, /ai-pm-dev-1\.3\.0\.tgz/);
     const packJson = JSON.parse(runNpm(['pack', '--dry-run', '--json']));
     assert.ok(packJson[0].files.some((file) => file.path === 'workflow-core/index.mjs'));
-    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.2.0.tgz')), false);
+    assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.3.0.tgz')), false);
   }
 } finally {
   for (const root of tempRoots) {
