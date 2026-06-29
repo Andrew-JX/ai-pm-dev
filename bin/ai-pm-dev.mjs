@@ -2185,7 +2185,7 @@ function requireDevPlanStructure(raw) {
 function checkLines(checks) {
   return checks.map((check) => {
     const status = check.pass ? 'PASS' : (check.severity === 'required' ? 'FAIL' : 'WARN');
-    return `${status.padEnd(4)} ${check.name}${check.pass ? '' : ` 鈥?${check.hint}`}`;
+    return `${status.padEnd(4)} ${check.name}${check.pass ? '' : ` — ${check.hint}`}`;
   });
 }
 

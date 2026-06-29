@@ -188,7 +188,9 @@ try {
     }
     assert.equal(failed, true, 'plan check --strict should fail when required checks fail');
     assert.match(stdout, /FAIL First slice proves the one thing/);
+    assert.match(stdout, /FAIL First slice proves the one thing — Make the first slice explicitly prove the PRD one thing\./);
     assert.match(stdout, /FAIL Every PRD must-have maps to a slice/);
+    assert.doesNotMatch(stdout, /\u9225/);
     assert.match(stdout, /Strict mode: exiting non-zero because required checks failed/);
     assert.equal(existsSync(join(sessionPath, 'dev-plan-quality-report.md')), true);
     assert.equal(existsSync(join(sessionPath, 'dev-plan-quality-report.json')), true);
