@@ -267,6 +267,50 @@ ${check.rollback || 'Not specified.'}
 `;
 }
 
+export function buildReleaseChecklist(check) {
+  return `# Release Checklist: ${check.idea || check.goal || 'Untitled'}
+
+Source PRD session: ${check.prdSessionPath || 'Not linked.'}
+Source dev plan: ${check.devPlanPath || 'Not linked.'}
+
+## Release Scope
+
+${check.releaseScope || 'Not specified.'}
+
+## Required Verification
+
+${verificationMarkdown(check.verification)}
+
+## Acceptance Evidence
+
+${acceptanceMarkdown(check.acceptanceEvidence)}
+
+## PRD Must-Haves
+
+${bulletList(check.mustHavesShipped.map((item) => `${item.mustHave || 'Not specified.'} (${item.status || 'unknown'}) -- ${item.evidence || 'No evidence'}`))}
+
+## Deferred Must-Haves
+
+${bulletList(check.deferredMustHaves.map((item) => `${item.mustHave || 'Not specified.'} -- ${item.reason || 'No reason'} -- waiver: ${item.waiver || 'None'}`), '- None.')}
+
+## Non-Goals Held
+
+${bulletList(check.nonGoalsHeld)}
+
+## Rollback
+
+${check.rollback || 'Not specified.'}
+
+## Open Blockers
+
+${bulletList(check.openBlockers.map((item) => `${item.blocker || 'Not specified.'}${item.waiver ? ` -- waiver: ${item.waiver}` : ''}`), '- None.')}
+
+## Docs Updates
+
+${bulletList(check.docsUpdates, '- None.')}
+`;
+}
+
 export function shippedMustHaveText(check) {
   return check.mustHavesShipped.map((item) => item.mustHave).join('\n');
 }

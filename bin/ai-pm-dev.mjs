@@ -33,7 +33,7 @@ import {
   buildDevPlanMarkdown,
   validateDevPlanStructure,
 } from '../workflow-core/dev-plan.mjs';
-import { evaluateDevPlan, evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import { evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import {
   parseQuickPrdStdin,
   prdQuestions,
@@ -42,6 +42,12 @@ import {
   questionsForType,
 } from '../workflow-core/questions.mjs';
 import { buildQualityReportJson, buildQualityReportMarkdown } from '../workflow-core/quality-report.mjs';
+import {
+  buildReleaseChecklist,
+  buildReleaseHandoff,
+  buildShipCheckMarkdown,
+  validateShipCheckStructure,
+} from '../workflow-core/ship-check.mjs';
 import { createAnthropicPrdClient } from '../llm/anthropic-client.mjs';
 import { createClarificationState, runPrdClarificationTurn } from '../llm/prd-clarifier.mjs';
 import { DEFAULT_REASONING_MODEL, resolveModelAlias } from '../llm/models.mjs';
@@ -73,6 +79,9 @@ Usage:
   ai-pm-dev plan materialize [--target <path>] < dev-plan.json
   ai-pm-dev plan check [--strict] [--target <path>]
   ai-pm-dev plan handoff [--target <path>]
+  ai-pm-dev ship materialize [--target <path>] < ship-check.json
+  ai-pm-dev ship check [--strict] [--target <path>]
+  ai-pm-dev ship handoff [--target <path>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
   ai-pm-dev decision-record "<title>" [--why <reason>] [--goals <goals>] [--non-goals <non-goals>] [--test <plan>] [--rollback <plan>] [--target <path>]
@@ -105,6 +114,7 @@ Commands:
   init           Install workflow files into a target project.
   prd            Run an interactive PM interview and generate AI-PRD assets.
   plan           Materialize, check, or print the latest PRD-linked dev plan.
+  ship           Materialize, check, or print the latest PRD-linked ship check.
   start          Route a task, generate the AI prompt, and optionally save task state.
   decide         Append a one-line decision to docs/decision-log.md.
   decision-record Write a KEP-lite decision record for a larger change.
@@ -2316,6 +2326,18 @@ function readDevPlanStdin() {
   }
 }
 
+function readShipCheckStdin() {
+  const raw = readFileSync(0, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Usage: ai-pm-dev ship materialize [--target <path>] < ship-check.json');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON stdin for ship materialize.');
+  }
+}
+
 function prdAnchoredPlan(plan, answers, sessionPath) {
   return {
     ...plan,
@@ -2328,12 +2350,30 @@ function prdAnchoredPlan(plan, answers, sessionPath) {
   };
 }
 
+function prdAnchoredShipCheck(check, answers, sessionPath, latestDevPlanPath) {
+  return {
+    ...check,
+    prdSessionPath: sessionPath,
+    devPlanPath: latestDevPlanPath,
+    idea: answers.idea || '',
+    oneThing: answers.oneThing || '',
+  };
+}
+
 function requireDevPlanStructure(raw) {
   const validation = validateDevPlanStructure(raw);
   if (!validation.ok) {
     throw new Error(`Invalid dev plan structure:\n- ${validation.errors.join('\n- ')}`);
   }
   return validation.plan;
+}
+
+function requireShipCheckStructure(raw) {
+  const validation = validateShipCheckStructure(raw);
+  if (!validation.ok) {
+    throw new Error(`Invalid ship check structure:\n- ${validation.errors.join('\n- ')}`);
+  }
+  return validation.check;
 }
 
 function checkLines(checks) {
@@ -2465,6 +2505,143 @@ function runPlan(args) {
   throw new Error('Usage: ai-pm-dev plan materialize [--target <path>] < dev-plan.json | plan check [--strict] [--target <path>] | plan handoff [--target <path>]');
 }
 
+function runShipMaterialize(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const latestDevPlanPath = join(sessionPath, 'dev-plan.json');
+  if (!existsSync(latestDevPlanPath)) {
+    throw new Error(`No dev plan found for latest PRD session. Run: ai-pm-dev plan materialize --target "${target}" < dev-plan.json`);
+  }
+
+  const rawCheck = readShipCheckStdin();
+  const check = prdAnchoredShipCheck(requireShipCheckStructure(rawCheck), answers, sessionPath, latestDevPlanPath);
+  const shipCheckJson = `${JSON.stringify(check, null, 2)}\n`;
+  const shipCheckMarkdown = buildShipCheckMarkdown(check);
+  const releaseHandoff = buildReleaseHandoff(check);
+  const releaseChecklist = buildReleaseChecklist(check);
+  const docsDir = join(target, 'docs');
+  const memoryDir = join(target, 'memory');
+  const stateDir = join(target, '.ai-pm-dev');
+  const shipCheckJsonPath = join(sessionPath, 'ship-check.json');
+  const shipCheckMarkdownPath = join(sessionPath, 'ship-check.md');
+  const releaseHandoffPath = join(sessionPath, 'handoff-release.md');
+  const releaseChecklistPath = join(docsDir, 'release-checklist.md');
+  const promptPath = join(memoryDir, 'current-task-prompt.md');
+  const statePath = join(stateDir, 'state.json');
+
+  mkdirSync(docsDir, { recursive: true });
+  mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(shipCheckJsonPath, shipCheckJson, 'utf8');
+  writeFileSync(shipCheckMarkdownPath, shipCheckMarkdown, 'utf8');
+  writeFileSync(releaseHandoffPath, releaseHandoff, 'utf8');
+  writeFileSync(releaseChecklistPath, releaseChecklist, 'utf8');
+  writeFileSync(promptPath, releaseHandoff, 'utf8');
+  writeFileSync(statePath, `${JSON.stringify({
+    version,
+    task: check.idea || check.goal,
+    skill: 'release-builder',
+    phase: 'Ship',
+    skillPath: 'skills/release-builder/SKILL.md',
+    nextStep: 'Run ai-pm-dev ship check --strict, then hand off from handoff-release.md.',
+    prdSessionPath: sessionPath,
+    updatedAt: new Date().toISOString(),
+  }, null, 2)}\n`, 'utf8');
+  appendCheckpoint(target, 'ship', check.goal || check.releaseScope || check.idea);
+
+  return `Ship check materialized
+
+Session: ${sessionPath}
+Artifacts:
+- ${shipCheckJsonPath}
+- ${shipCheckMarkdownPath}
+- ${releaseHandoffPath}
+- ${releaseChecklistPath}
+
+Next: ai-pm-dev ship check --strict --target "${target}"
+`;
+}
+
+function loadLatestShipCheck(target) {
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const latestDevPlanPath = join(sessionPath, 'dev-plan.json');
+  if (!existsSync(latestDevPlanPath)) {
+    throw new Error(`No dev plan found for latest PRD session. Run: ai-pm-dev plan materialize --target "${target}" < dev-plan.json`);
+  }
+  const shipCheckJsonPath = join(sessionPath, 'ship-check.json');
+  if (!existsSync(shipCheckJsonPath)) {
+    throw new Error(`No ship check found for latest PRD session. Run: ai-pm-dev ship materialize --target "${target}" < ship-check.json`);
+  }
+  const check = requireShipCheckStructure(JSON.parse(readFileSync(shipCheckJsonPath, 'utf8')));
+  return { sessionPath, latestDevPlanPath, answers, check };
+}
+
+function runShipCheck(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, latestDevPlanPath, answers, check } = loadLatestShipCheck(target);
+  const checks = evaluateShipCheck(check, {
+    sessionPath,
+    latestSessionPath: sessionPath,
+    latestDevPlanPath,
+    answers,
+  });
+  const score = scoreChecks(checks);
+  const reportPath = join(sessionPath, 'ship-quality-report.md');
+  const reportJsonPath = join(sessionPath, 'ship-quality-report.json');
+  const report = buildQualityReportMarkdown(check, checks, score, {
+    title: 'Ship Quality Report',
+    generatedBy: 'ai-pm-dev ship check',
+  });
+  writeFileSync(reportPath, report, 'utf8');
+  writeFileSync(reportJsonPath, `${JSON.stringify(buildQualityReportJson(check, checks, score, {
+    generatedBy: 'ai-pm-dev ship check',
+    idea: check.idea,
+    sessionPath,
+  }), null, 2)}\n`, 'utf8');
+
+  const strict = args.includes('--strict');
+  if (strict && score.overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  return `Ship Quality Check${strict ? ' (strict)' : ''}
+
+Session: ${sessionPath}
+Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
+
+${checkLines(checks).join('\n')}
+
+Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: exiting non-zero because required checks failed.' : ''}
+`;
+}
+
+function runShipHandoff(args) {
+  const target = resolve(parseTarget(args));
+  const sessionPath = latestPrdSession(target);
+  if (!sessionPath) {
+    throw new Error(`No PRD sessions found for ${target}. Run: ai-pm-dev prd --target "${target}"`);
+  }
+  const handoffPath = join(sessionPath, 'handoff-release.md');
+  if (!existsSync(handoffPath)) {
+    throw new Error(`No release handoff found for latest PRD session. Run: ai-pm-dev ship materialize --target "${target}" < ship-check.json`);
+  }
+  return readFileSync(handoffPath, 'utf8');
+}
+
+function runShip(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'materialize') {
+    return runShipMaterialize(rest);
+  }
+  if (subcommand === 'check') {
+    return runShipCheck(rest);
+  }
+  if (subcommand === 'handoff') {
+    return runShipHandoff(rest);
+  }
+  throw new Error('Usage: ai-pm-dev ship materialize [--target <path>] < ship-check.json | ship check [--strict] [--target <path>] | ship handoff [--target <path>]');
+}
+
 async function runPrd(args) {
   const [subcommand, ...rest] = args;
   if (subcommand === 'clarify') {
@@ -2531,6 +2708,8 @@ try {
     process.stdout.write(await runPrd(args));
   } else if (command === 'plan') {
     process.stdout.write(runPlan(args));
+  } else if (command === 'ship') {
+    process.stdout.write(runShip(args));
   } else if (command === 'start') {
     process.stdout.write(runStart(args));
   } else if (command === 'decide') {
