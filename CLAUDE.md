@@ -44,6 +44,14 @@ Spec -> Design Brief -> Design -> Dev Plan -> Build -> Bug Fix -> Review -> Rele
 - For core business logic, data flows, algorithms, AI/tool loops, state machines, security, or persistence, the final report must explain why the implementation works. Code the user cannot understand or explain is not considered done.
 - Record meaningful decisions and repeated debugging lessons in project docs when the project has suitable files, such as `docs/ai-decisions.md`, `docs/decisions.md`, `docs/troubleshooting.md`, or this repo's `memory/`.
 
+## Risk-Tier Routing
+
+Use the lightest path that still protects the user:
+
+- For small, reversible edits such as wording, docs, local config, or narrow non-behavioral cleanup, use a light path: inspect context, make the change, run the relevant quick check, and report residual risk.
+- For data handling, permissions/auth, migrations, secrets, releases, irreversible operations, core algorithms, AI/tool loops, state machines, or broad cross-file behavior, use the full loop: plan -> review -> code -> review -> verify.
+- Do not add process ceremony when it does not reduce a real failure mode. Do not skip strict review where the failure mode involves security, data loss, user trust, rollback, or hard-to-detect behavioral drift.
+
 ## Project Context Checklist
 
 When starting work inside an existing project, gather only the context needed for the task:

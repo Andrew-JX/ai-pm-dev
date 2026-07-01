@@ -88,6 +88,7 @@ Use these guardrails before handing a plan to an AI coding tool:
 4. Define the human-owned decisions separately from AI-executable work: data model, permissions, destructive changes, security boundaries, migrations, external costs, and release/rollback choices need human confirmation.
 5. State the verification command or manual flow before implementation starts. A slice without a verification path is not ready.
 6. For larger or risky changes, require `ai-pm-dev decision-record "<title>"` before build work begins, including docs update, verification, and rollback notes.
+7. Add a pre-build plan review checkpoint before implementation starts. Use the code-review lens to catch scope drift, unsafe defaults, missing verification, data/security/migration risk, rollback gaps, and oversized slices while fixes are still cheap. This is process guidance, not a new CLI command.
 
 ## AI PM Dev Materialization Contract
 

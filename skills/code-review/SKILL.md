@@ -85,3 +85,8 @@ Review as a gate, not a style pass:
 5. Prioritize data integrity, permissions, auth, secrets, transactions, migrations, unsafe deletes, and rollback risk.
 6. Check docs update obligations: decision logs, troubleshooting, ownership, release notes, and acceptance tests should move with the code.
 7. If no findings, still state test gaps/residual risk.
+8. Independently rerun the applicable gates whenever feasible (`test`, `lint`, `type-check`, `build`, or the named manual smoke) and report your own results. The implementer's "green" summary is useful context, not review evidence.
+9. Ground every finding in file/line evidence you actually read during the review. Do not infer findings from the plan, memory, or summaries alone.
+10. Explicitly retract suspected issues that do not survive source-code verification. A clean retraction is better than leaving a stale concern in the record.
+11. For parser, matcher, classifier, sorting, routing, or rule changes, construct adversarial inputs and run them when feasible; static inspection is not enough for this class of logic.
+12. Prefer a fresh reviewer instance or fresh context that is separate from the implementer, especially for security, data, migration, release, or core workflow changes.

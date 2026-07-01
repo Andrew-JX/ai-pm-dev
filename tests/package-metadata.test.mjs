@@ -55,7 +55,11 @@ for (const skillPath of hardenedSkills) {
 }
 
 assert.match(readFileSync('skills/dev-planner/SKILL.md', 'utf8'), /review-route/);
+assert.match(readFileSync('skills/dev-planner/SKILL.md', 'utf8'), /plan review/);
 assert.match(readFileSync('skills/dev-builder/SKILL.md', 'utf8'), /decision-record/);
 assert.match(readFileSync('skills/bug-fixer/SKILL.md', 'utf8'), /actual\/expected\/repro\/impact\/verify/);
 assert.match(readFileSync('skills/code-review/SKILL.md', 'utf8'), /Review as a gate/);
+assert.match(readFileSync('skills/code-review/SKILL.md', 'utf8'), /Independently rerun/);
+assert.match(readFileSync('skills/code-review/SKILL.md', 'utf8'), /fresh reviewer/);
+assert.match(readFileSync('skills/code-review/SKILL.md', 'utf8'), /Ground every finding/);
 assert.match(readFileSync('skills/release-builder/SKILL.md', 'utf8'), /prd check --strict/);
