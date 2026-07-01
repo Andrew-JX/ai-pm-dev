@@ -7,6 +7,11 @@ import {
   prdNonGoalItems,
 } from './dev-plan.mjs';
 import { countItems, listItems } from './items.mjs';
+import {
+  coveredMustHaveText,
+  nonGoalsHeldText,
+  passedAcceptanceCriterionText,
+} from './ship-check.mjs';
 
 function normalizeForSearch(value) {
   return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -189,6 +194,81 @@ export const DEV_PLAN_GATE_RULES = [
   ),
 ];
 
+export const SHIP_CHECK_GATE_RULES = [
+  required('project', 'ship-latest-prd-session-exists', 'Latest PRD session exists', (ctx) => Boolean(ctx.latestSessionPath), 'Run ai-pm-dev prd before preparing a ship check.'),
+  required('project', 'ship-latest-dev-plan-exists', 'Latest dev plan exists', (ctx) => ctx.exists(ctx.latestDevPlanPath), 'Run ai-pm-dev plan materialize before preparing a ship check.'),
+  required(
+    'project',
+    'ship-linked-to-latest-prd',
+    'Ship check source is latest PRD',
+    (ctx) => Boolean(ctx.latestSessionPath) && ctx.check.prdSessionPath === ctx.latestSessionPath,
+    'Regenerate the ship check from the latest PRD session.',
+  ),
+  required(
+    'project',
+    'ship-linked-to-latest-dev-plan',
+    'Ship check source is latest dev plan',
+    (ctx) => ctx.exists(ctx.latestDevPlanPath) && ctx.check.devPlanPath === ctx.latestDevPlanPath,
+    'Regenerate the ship check from the latest dev-plan.json.',
+  ),
+  required(
+    'answers',
+    'ship-one-thing-shipped',
+    'PRD one thing is shipped',
+    (ctx) => ctx.has('oneThing') && ctx.check.mustHavesShipped.some((item) => item.status === 'shipped' && includesMeaningfulSnippet(item.mustHave, ctx.text('oneThing'))),
+    'The PRD oneThing must appear in mustHavesShipped with status "shipped"; waiver or deferral is not accepted.',
+  ),
+  required(
+    'answers',
+    'ship-covers-must-haves',
+    'Every PRD must-have is shipped or explicitly deferred',
+    (ctx) => allSnippetsPresent(coveredMustHaveText(ctx.check), prdMustHaveItems(ctx.answers)),
+    'Cover every PRD must-have in mustHavesShipped or deferredMustHaves.',
+  ),
+  required(
+    'answers',
+    'ship-deferred-have-waivers',
+    'Deferred must-haves include reason and waiver',
+    (ctx) => ctx.check.deferredMustHaves.every((item) => item.reason.trim().length > 0 && item.waiver.trim().length > 0),
+    'Every deferred must-have needs both a reason and an explicit waiver.',
+  ),
+  required(
+    'answers',
+    'ship-acceptance-evidence-present',
+    'Every PRD acceptance criterion has passing evidence',
+    (ctx) => allSnippetsPresent(passedAcceptanceCriterionText(ctx.check), listItems(ctx.text('acceptanceCriteria'))),
+    'Each PRD acceptance criterion needs passed evidence with a non-empty evidence field.',
+  ),
+  required(
+    'answers',
+    'ship-verification-evidence-present',
+    'Verification ran and has evidence',
+    (ctx) => ctx.check.verification.length > 0 && ctx.check.verification.every((item) => item.command.trim().length > 0 && item.evidence.trim().length > 0 && item.passed === true),
+    'Add at least one passed verification entry with command and evidence.',
+  ),
+  required(
+    'answers',
+    'ship-non-goals-held',
+    'PRD non-goals remain unbuilt',
+    (ctx) => allSnippetsPresent(nonGoalsHeldText(ctx.check), prdNonGoalItems(ctx.answers)),
+    'Copy every PRD non-goal into nonGoalsHeld.',
+  ),
+  required(
+    'answers',
+    'ship-rollback-present',
+    'Rollback or recovery plan exists',
+    (ctx) => ctx.check.rollback.trim().length > 0,
+    'Add a concrete rollback or recovery plan.',
+  ),
+  required(
+    'answers',
+    'ship-open-blockers-waived',
+    'No unresolved blockers without waiver',
+    (ctx) => ctx.check.openBlockers.every((item) => item.waiver.trim().length > 0),
+    'Clear openBlockers or add an explicit waiver for each blocker.',
+  ),
+];
+
 function buildPrdContext(answers, context = {}, options = {}) {
   const resolved = resolveContext(context);
   const includeProjectState = options.includeProjectState ?? true;
@@ -240,6 +320,24 @@ function buildDevPlanContext(plan, context = {}, options = {}) {
   };
 }
 
+function buildShipCheckContext(check, context = {}) {
+  const resolved = resolveContext(context);
+  const answers = context.answers || {};
+  const text = (key) => (answers[key] || '').trim();
+  const has = (key) => text(key).length > 0;
+  const latestSessionPath = context.latestSessionPath || resolved.sessionPath || '';
+  const latestDevPlanPath = context.latestDevPlanPath || join(resolved.sessionPath, 'dev-plan.json');
+  return {
+    ...resolved,
+    answers,
+    check,
+    text,
+    has,
+    latestSessionPath,
+    latestDevPlanPath,
+  };
+}
+
 function evaluateRules(rules, ctx) {
   return rules.map((rule) => {
     const pass = rule.predicate(ctx);
@@ -259,6 +357,10 @@ export function evaluateAnswerGates(answers) {
 
 export function evaluateDevPlan(plan, context = {}) {
   return evaluateRules(DEV_PLAN_GATE_RULES, buildDevPlanContext(plan, context));
+}
+
+export function evaluateShipCheck(check, context = {}) {
+  return evaluateRules(SHIP_CHECK_GATE_RULES, buildShipCheckContext(check, context));
 }
 
 export function scoreChecks(checks) {

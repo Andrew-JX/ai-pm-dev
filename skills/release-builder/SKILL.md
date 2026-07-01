@@ -82,3 +82,62 @@ Before saying "ready":
 5. Confirm rollback path before deploy/release; if rollback is unknown, mark blocked.
 6. Check secrets/config/env/migrations are handled outside source and documented.
 7. Write/update `release-checklist.md`, `local-run-guide.md`, or `demo-script.md` when release knowledge would otherwise live only in chat.
+
+## AI PM Dev Materialization Contract
+
+When this skill is used after an `ai-pm-dev plan` stage, the host agent owns the release-readiness reasoning and `ai-pm-dev` owns deterministic materialization and gates. Do not call an LLM API from `ai-pm-dev` for this stage.
+
+1. Read the latest PRD session plus `ai-prd.md`, `scope.md`, `acceptance-tests.md`, `dev-plan.json`, and `dev-plan.md`.
+2. Produce a ship-check JSON object with this shape:
+
+```json
+{
+  "goal": "Confirm the built MVP is ready to hand off or ship.",
+  "releaseScope": "What is being delivered.",
+  "targetEnvironment": "local/staging/production/manual handoff target.",
+  "changes": ["Delivered changes."],
+  "verification": [
+    {
+      "command": "npm test",
+      "passed": true,
+      "evidence": "Relevant output or result summary."
+    }
+  ],
+  "acceptanceEvidence": [
+    {
+      "criterion": "Exact PRD acceptance criterion snippet.",
+      "passed": true,
+      "evidence": "Proof."
+    }
+  ],
+  "mustHavesShipped": [
+    {
+      "mustHave": "Exact PRD must-have snippet.",
+      "slice": "slice-1",
+      "status": "shipped",
+      "evidence": "Proof."
+    }
+  ],
+  "deferredMustHaves": [
+    {
+      "mustHave": "Exact PRD must-have snippet.",
+      "reason": "Why deferred.",
+      "waiver": "Explicit waiver."
+    }
+  ],
+  "nonGoalsHeld": ["Exact PRD non-goal snippet."],
+  "rollback": "Concrete rollback or recovery plan.",
+  "openBlockers": [],
+  "docsUpdates": ["docs/release-checklist.md"]
+}
+```
+
+3. Materialize and gate it in the CLI batches that provide `ship` commands:
+
+```sh
+ai-pm-dev ship materialize --target <project> < ship-check.json
+ai-pm-dev ship check --strict --target <project>
+ai-pm-dev ship handoff --target <project>
+```
+
+The ship gate must fail if the PRD oneThing is not actually shipped, if evidence fields are empty, if must-haves are neither shipped nor explicitly deferred with waiver, if PRD non-goals are not held, if rollback is missing, or if open blockers lack waivers.

@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { docStatus, readProjectState } from '../apps/web/server/project-state.mjs';
 import { buildBuildHandoff, buildDevPlanMarkdown, validateDevPlanStructure } from '../workflow-core/dev-plan.mjs';
-import { evaluateDevPlan, evaluatePrd, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import { evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import { validateShipCheckStructure } from '../workflow-core/ship-check.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cliPath = join(repoRoot, 'bin', 'ai-pm-dev.mjs');
@@ -288,6 +289,149 @@ try {
     assert.ok(failures.includes('PRD non-goals stay excluded'));
     assert.ok(failures.includes('Every slice has verification'));
     assert.ok(failures.includes('Slices stay reviewable'));
+  }
+
+  {
+    const answers = {
+      idea: 'AI fitness logging tool',
+      mvpScope: 'Workout logging; weekly summary; progress trend',
+      oneThing: 'Workout logging',
+      nonGoals: 'No social features; no medical advice',
+      acceptanceCriteria: 'A beginner understands weekly progress within five minutes; Weekly summary shows volume',
+    };
+    const sessionPath = 'C:\\project\\.ai-pm-dev\\prd-sessions\\latest';
+    const latestDevPlanPath = 'C:\\project\\.ai-pm-dev\\prd-sessions\\latest\\dev-plan.json';
+    const baseShipCheck = {
+      prdSessionPath: sessionPath,
+      devPlanPath: latestDevPlanPath,
+      goal: 'Confirm the fitness MVP can ship',
+      releaseScope: 'Fitness logging MVP',
+      targetEnvironment: 'local handoff',
+      changes: ['Workout logging, weekly summary, and progress trend delivered'],
+      verification: [
+        {
+          command: 'npm test',
+          passed: true,
+          evidence: 'All tests passed and manual workout logging smoke completed.',
+        },
+      ],
+      acceptanceEvidence: [
+        {
+          criterion: 'A beginner understands weekly progress within five minutes',
+          passed: true,
+          evidence: 'Manual smoke showed weekly progress in under five minutes.',
+        },
+        {
+          criterion: 'Weekly summary shows volume',
+          passed: true,
+          evidence: 'Summary screen displayed weekly volume from logged workouts.',
+        },
+      ],
+      mustHavesShipped: [
+        {
+          mustHave: 'Workout logging',
+          slice: 'slice-1',
+          status: 'shipped',
+          evidence: 'Manual smoke created and saved a workout.',
+        },
+        {
+          mustHave: 'weekly summary',
+          slice: 'slice-2',
+          status: 'shipped',
+          evidence: 'Weekly summary rendered from saved workouts.',
+        },
+        {
+          mustHave: 'progress trend',
+          slice: 'slice-2',
+          status: 'shipped',
+          evidence: 'Progress trend rendered from saved workouts.',
+        },
+      ],
+      deferredMustHaves: [],
+      nonGoalsHeld: ['No social features', 'no medical advice'],
+      rollback: 'Revert the release commit and restore the previous static build.',
+      openBlockers: [],
+      docsUpdates: ['docs/release-checklist.md'],
+    };
+    const context = {
+      answers,
+      sessionPath,
+      latestSessionPath: sessionPath,
+      latestDevPlanPath,
+      exists(path) {
+        return path === latestDevPlanPath;
+      },
+    };
+    const check = validateShipCheckStructure(baseShipCheck).check;
+    assert.equal(validateShipCheckStructure(baseShipCheck).ok, true);
+    assert.equal(scoreChecks(evaluateShipCheck(check, context)).overall, 'PASS');
+
+    const oneThingDeferred = validateShipCheckStructure({
+      ...baseShipCheck,
+      mustHavesShipped: baseShipCheck.mustHavesShipped.filter((item) => item.mustHave !== 'Workout logging'),
+      deferredMustHaves: [
+        {
+          mustHave: 'Workout logging',
+          reason: 'Not built yet',
+          waiver: 'Explicitly waived for test',
+        },
+      ],
+    }).check;
+    assert.ok(evaluateShipCheck(oneThingDeferred, context).filter((item) => !item.pass).map((item) => item.name).includes('PRD one thing is shipped'));
+
+    const emptyAcceptanceEvidence = validateShipCheckStructure({
+      ...baseShipCheck,
+      acceptanceEvidence: [
+        { ...baseShipCheck.acceptanceEvidence[0], evidence: '' },
+        baseShipCheck.acceptanceEvidence[1],
+      ],
+    }).check;
+    assert.ok(evaluateShipCheck(emptyAcceptanceEvidence, context).filter((item) => !item.pass).map((item) => item.name).includes('Every PRD acceptance criterion has passing evidence'));
+
+    const emptyVerificationEvidence = validateShipCheckStructure({
+      ...baseShipCheck,
+      verification: [{ ...baseShipCheck.verification[0], evidence: '' }],
+    }).check;
+    assert.ok(evaluateShipCheck(emptyVerificationEvidence, context).filter((item) => !item.pass).map((item) => item.name).includes('Verification ran and has evidence'));
+
+    const emptyVerificationCommand = validateShipCheckStructure({
+      ...baseShipCheck,
+      verification: [{ ...baseShipCheck.verification[0], command: '' }],
+    }).check;
+    assert.ok(evaluateShipCheck(emptyVerificationCommand, context).filter((item) => !item.pass).map((item) => item.name).includes('Verification ran and has evidence'));
+
+    const missingMustHaveCoverage = validateShipCheckStructure({
+      ...baseShipCheck,
+      mustHavesShipped: baseShipCheck.mustHavesShipped.filter((item) => item.mustHave !== 'progress trend'),
+    }).check;
+    assert.ok(evaluateShipCheck(missingMustHaveCoverage, context).filter((item) => !item.pass).map((item) => item.name).includes('Every PRD must-have is shipped or explicitly deferred'));
+
+    const deferredWithoutWaiver = validateShipCheckStructure({
+      ...baseShipCheck,
+      mustHavesShipped: baseShipCheck.mustHavesShipped.filter((item) => item.mustHave !== 'weekly summary'),
+      deferredMustHaves: [
+        {
+          mustHave: 'weekly summary',
+          reason: '',
+          waiver: 'Release owner accepted the deferral.',
+        },
+      ],
+    }).check;
+    assert.ok(evaluateShipCheck(deferredWithoutWaiver, context).filter((item) => !item.pass).map((item) => item.name).includes('Deferred must-haves include reason and waiver'));
+
+    const staleDevPlan = validateShipCheckStructure({
+      ...baseShipCheck,
+      devPlanPath: 'C:\\project\\.ai-pm-dev\\prd-sessions\\old\\dev-plan.json',
+    }).check;
+    assert.ok(evaluateShipCheck(staleDevPlan, context).filter((item) => !item.pass).map((item) => item.name).includes('Ship check source is latest dev plan'));
+
+    const missingLatestDevPlan = evaluateShipCheck(check, {
+      ...context,
+      exists() {
+        return false;
+      },
+    }).filter((item) => !item.pass).map((item) => item.name);
+    assert.ok(missingLatestDevPlan.includes('Latest dev plan exists'));
   }
 } finally {
   for (const dir of tempRoots) {
