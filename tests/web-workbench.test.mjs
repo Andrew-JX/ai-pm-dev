@@ -81,6 +81,54 @@ function validDevPlanInput() {
   })}\n`;
 }
 
+function validShipInput() {
+  return `${JSON.stringify({
+    goal: 'Confirm the fitness MVP can ship',
+    releaseScope: 'Ship workout logging, progress trend, and weekly summary.',
+    targetEnvironment: 'local handoff',
+    changes: ['Workout logging delivered', 'Progress trend delivered', 'Weekly summary delivered'],
+    verification: [
+      {
+        command: 'npm test',
+        passed: true,
+        evidence: 'All CLI and workflow tests passed.',
+      },
+    ],
+    acceptanceEvidence: [
+      {
+        criterion: 'A beginner understands weekly progress within five minutes',
+        passed: true,
+        evidence: 'Manual smoke showed weekly progress in under five minutes.',
+      },
+    ],
+    mustHavesShipped: [
+      {
+        mustHave: 'Workout logging',
+        slice: 'slice-1',
+        status: 'shipped',
+        evidence: 'Manual smoke created and saved a workout.',
+      },
+      {
+        mustHave: 'progress trend',
+        slice: 'slice-2',
+        status: 'shipped',
+        evidence: 'Progress trend rendered from saved workouts.',
+      },
+      {
+        mustHave: 'weekly summary',
+        slice: 'slice-2',
+        status: 'shipped',
+        evidence: 'Weekly summary rendered from saved workouts.',
+      },
+    ],
+    deferredMustHaves: [],
+    nonGoalsHeld: ['No social features in v1', 'no medical advice'],
+    rollback: 'Revert the release commit and restore the previous static build.',
+    openBlockers: [],
+    docsUpdates: ['docs/release-checklist.md'],
+  })}\n`;
+}
+
 function consumerPrdInput() {
   return `${[
     'A playful dating plan mini-app',
@@ -106,6 +154,7 @@ try {
     assert.equal(state.projectInitialized, false);
     assert.equal(state.latestSession, null);
     assert.equal(state.qualityGate.overall, 'UNKNOWN');
+    assert.equal(state.shipGate.overall, 'UNKNOWN');
     assert.equal(state.nextAction.command, 'ai-pm-dev init .');
     assert.ok(state.artifacts.some((artifact) => artifact.relativePath === 'docs/scope.md' && artifact.status === 'missing'));
   }
@@ -200,14 +249,25 @@ try {
     assert.match(beforePlan.nextAction.command, /ai-pm-dev plan check --strict/);
 
     runCli(['plan', 'materialize', '--target', target], { input: validDevPlanInput() });
+
+    const withUngatedPlan = readProjectState(target);
+    assert.equal(withUngatedPlan.devPlanGate.overall, 'UNKNOWN');
+    assert.equal(withUngatedPlan.artifacts.find((artifact) => artifact.id === 'dev-plan')?.status, 'filled');
+    assert.doesNotMatch(withUngatedPlan.nextAction.command, /release-builder/);
+    assert.doesNotMatch(withUngatedPlan.nextAction.command, /ship materialize/);
+
     runCli(['plan', 'check', '--strict', '--target', target]);
 
     const afterPlan = readProjectState(target);
     assert.equal(afterPlan.devPlanGate.overall, 'PASS');
+    assert.equal(afterPlan.shipGate.overall, 'UNKNOWN');
     assert.equal(afterPlan.phases.find((phase) => phase.id === 'plan')?.status, 'done');
     assert.equal(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan')?.status, 'filled');
     assert.equal(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan-gate-report')?.status, 'filled');
     assert.match(afterPlan.artifacts.find((artifact) => artifact.id === 'dev-plan')?.preview || '', /Dev Plan: AI fitness logging tool/);
+    assert.match(afterPlan.nextAction.command, /release-builder/);
+    assert.match(afterPlan.nextAction.command, /ai-pm-dev ship materialize/);
+    assert.match(afterPlan.nextAction.command, /ai-pm-dev ship check --strict/);
 
     const project = await handleApiRequest({
       method: 'GET',
@@ -217,6 +277,26 @@ try {
     assert.equal(project.status, 200);
     assert.equal(project.body.devPlanGate.overall, 'PASS');
     assert.equal(project.body.artifacts.find((artifact) => artifact.id === 'dev-plan')?.status, 'filled');
+
+    runCli(['ship', 'materialize', '--target', target], { input: validShipInput() });
+    runCli(['ship', 'check', '--strict', '--target', target]);
+
+    const afterShip = readProjectState(target);
+    assert.equal(afterShip.shipGate.overall, 'PASS');
+    assert.equal(afterShip.phases.find((phase) => phase.id === 'ship')?.status, 'done');
+    assert.equal(afterShip.artifacts.find((artifact) => artifact.id === 'ship-check')?.status, 'filled');
+    assert.equal(afterShip.artifacts.find((artifact) => artifact.id === 'ship-gate-report')?.status, 'filled');
+    assert.match(afterShip.artifacts.find((artifact) => artifact.id === 'ship-check')?.preview || '', /Ship Check: AI fitness logging tool/);
+    assert.equal(afterShip.nextAction.command, 'Ship complete');
+
+    const shippedProject = await handleApiRequest({
+      method: 'GET',
+      url: `/api/project?target=${encodeURIComponent(target)}`,
+      body: '',
+    });
+    assert.equal(shippedProject.status, 200);
+    assert.equal(shippedProject.body.shipGate.overall, 'PASS');
+    assert.equal(shippedProject.body.artifacts.find((artifact) => artifact.id === 'ship-check')?.status, 'filled');
   }
 
   {

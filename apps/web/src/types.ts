@@ -51,6 +51,7 @@ export type ProjectState = {
   artifacts: ArtifactSummary[];
   qualityGate: QualityGateResult;
   devPlanGate: QualityGateResult;
+  shipGate: QualityGateResult;
   openQuestions: string;
   decisions: string;
   progress: string;

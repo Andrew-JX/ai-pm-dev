@@ -347,6 +347,23 @@ function App() {
               ))}
             </ul>
           </section>
+
+          <section className="panel">
+            <p className="section-label">Ship Gate</p>
+            <div className={`gate ${gateClass(state?.shipGate.overall || 'UNKNOWN')}`}>
+              <span>Ship Gate</span>
+              <strong>{state?.shipGate.overall || 'UNKNOWN'}</strong>
+            </div>
+            <div className="gate-score">
+              <span>Required {state?.shipGate.requiredPass || 0}/{state?.shipGate.requiredTotal || 0}</span>
+              <span>Recommended {state?.shipGate.recommendedPass || 0}/{state?.shipGate.recommendedTotal || 0}</span>
+            </div>
+            <ul className="check-list">
+              {(state?.shipGate.checks || []).slice(0, 5).map((check) => (
+                <li key={check.name} className={check.status.toLowerCase()}>{check.name}</li>
+              ))}
+            </ul>
+          </section>
         </aside>
       </section>
 

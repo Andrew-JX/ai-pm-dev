@@ -12,7 +12,7 @@ const coreDocs = [
   { id: 'progress', title: 'Progress', path: 'progress.md', phase: 'build' },
 ];
 
-const phaseOrder = ['idea', 'prd', 'scope', 'ui', 'plan', 'build', 'test'];
+const phaseOrder = ['idea', 'prd', 'scope', 'ui', 'plan', 'build', 'test', 'ship'];
 
 export function readText(path) {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
@@ -77,6 +77,7 @@ function latestSession(target) {
     answers,
     qualityReportJson: readJson(join(path, 'quality-report.json')),
     devPlanQualityReportJson: readJson(join(path, 'dev-plan-quality-report.json')),
+    shipQualityReportJson: readJson(join(path, 'ship-quality-report.json')),
   };
 }
 
@@ -114,6 +115,7 @@ function phaseStatuses(target, session, artifacts, qualityGate) {
     { id: 'plan', label: 'Dev Plan', done: filled.has('plan') || /plan|planner/i.test(state.skill || state.phase || '') },
     { id: 'build', label: 'Build', done: filled.has('build') || /build|builder/i.test(state.skill || state.phase || '') },
     { id: 'test', label: 'Test / Release', done: qualityGate.overall === 'PASS' },
+    { id: 'ship', label: 'Ship', done: filled.has('ship') || /ship|release-builder/i.test(state.skill || state.phase || '') },
   ];
   const firstOpen = phases.findIndex((phase) => !phase.done);
   return phases.map((phase, index) => ({
@@ -126,7 +128,7 @@ function deriveCurrentPhase(phases) {
   return phases.find((phase) => phase.status === 'current') || phases.at(-1);
 }
 
-function deriveNextAction(projectInitialized, session, qualityGate, currentPhase, hasDevPlan) {
+function deriveNextAction(projectInitialized, session, qualityGate, devPlanGate, shipGate, currentPhase, hasDevPlan, hasShipCheck) {
   if (!projectInitialized) {
     return {
       label: 'Initialize project',
@@ -160,6 +162,20 @@ function deriveNextAction(projectInitialized, session, qualityGate, currentPhase
       label: 'Plan in your code agent',
       command: 'dev-planner -> ai-pm-dev plan materialize -> ai-pm-dev plan check --strict',
       detail: 'Open your code agent, run the dev-planner skill, materialize its JSON plan with the CLI, then run the strict plan gate.',
+    };
+  }
+  if (shipGate.overall === 'PASS') {
+    return {
+      label: 'Ship gate passed',
+      command: 'Ship complete',
+      detail: 'The CLI-written ship gate passed; handoff or release readiness is recorded in the latest PRD session.',
+    };
+  }
+  if (devPlanGate.overall === 'PASS' && !hasShipCheck) {
+    return {
+      label: 'Prepare ship check',
+      command: 'release-builder -> ai-pm-dev ship materialize -> ai-pm-dev ship check --strict',
+      detail: 'Open your code agent, run the release-builder skill, materialize its JSON ship check with the CLI, then run the strict ship gate.',
     };
   }
   return {
@@ -212,15 +228,31 @@ export function readProjectState(targetInput = process.cwd()) {
         relativePath: `.ai-pm-dev/prd-sessions/${session.name}/dev-plan-quality-report.json`,
         phase: 'plan',
       }),
+      artifactSummary({
+        id: 'ship-check',
+        title: 'Ship Check',
+        path: join(session.path, 'ship-check.md'),
+        relativePath: `.ai-pm-dev/prd-sessions/${session.name}/ship-check.md`,
+        phase: 'ship',
+      }),
+      artifactSummary({
+        id: 'ship-gate-report',
+        title: 'Ship Gate Report',
+        path: join(session.path, 'ship-quality-report.json'),
+        relativePath: `.ai-pm-dev/prd-sessions/${session.name}/ship-quality-report.json`,
+        phase: 'ship',
+      }),
     );
   }
   const state = readJson(join(target, '.ai-pm-dev', 'state.json')) || {};
   const qualityGate = session?.qualityReportJson || unknownQualityGate();
   const devPlanGate = session?.devPlanQualityReportJson || unknownQualityGate();
+  const shipGate = session?.shipQualityReportJson || unknownQualityGate();
   const hasDevPlan = artifacts.some((artifact) => artifact.id === 'dev-plan' && artifact.status === 'filled');
+  const hasShipCheck = artifacts.some((artifact) => artifact.id === 'ship-check' && artifact.status === 'filled');
   const phases = phaseStatuses(target, session, artifacts, qualityGate);
   const currentPhase = deriveCurrentPhase(phases);
-  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, currentPhase, hasDevPlan);
+  const nextAction = deriveNextAction(projectInitialized, session, qualityGate, devPlanGate, shipGate, currentPhase, hasDevPlan, hasShipCheck);
 
   return {
     target,
@@ -236,6 +268,7 @@ export function readProjectState(targetInput = process.cwd()) {
     artifacts,
     qualityGate,
     devPlanGate,
+    shipGate,
     openQuestions: artifacts.find((item) => item.id === 'questions')?.preview || '',
     decisions: artifacts.find((item) => item.id === 'decisions')?.preview || '',
     progress: artifacts.find((item) => item.id === 'progress')?.preview || '',
