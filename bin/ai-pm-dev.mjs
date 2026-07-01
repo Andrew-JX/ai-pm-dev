@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -567,6 +567,157 @@ function hasAllSkills(target) {
   return requiredSkills.every((skill) => existsSync(join(target, 'skills', skill, 'SKILL.md')));
 }
 
+const staleReferenceExtensions = [
+  'md',
+  'mjs',
+  'js',
+  'ts',
+  'tsx',
+  'json',
+  'css',
+  'html',
+  'yml',
+  'yaml',
+];
+
+const staleReferencePattern = new RegExp(
+  [
+    String.raw`(?:^|[\s([{"'` + '`' + String.raw`])`,
+    String.raw`((?:(?:\.{1,2}[\\/])?(?:[A-Za-z0-9._-]+[\\/])+[A-Za-z0-9._-]+\.`,
+    String.raw`(?:${staleReferenceExtensions.join('|')})(?::\d+)?)`,
+    String.raw`|(?:(?:AGENTS|CLAUDE)\.md(?::\d+)?))`,
+  ].join(''),
+  'g',
+);
+
+function isInsideRoot(root, candidate) {
+  const rel = relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !/^[A-Za-z]:/.test(rel) && !rel.startsWith('\\'));
+}
+
+function normalizedRelativePath(root, path) {
+  return relative(root, path).replace(/\\/g, '/');
+}
+
+function collectMarkdownFiles(dir) {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  return readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return collectMarkdownFiles(path);
+      }
+      return entry.isFile() && entry.name.endsWith('.md') ? [path] : [];
+    });
+}
+
+function doctorReferenceDocs(target) {
+  return [
+    join(target, 'AGENTS.md'),
+    join(target, 'CLAUDE.md'),
+    ...collectMarkdownFiles(join(target, 'docs')),
+  ].filter((path) => existsSync(path)).sort();
+}
+
+function stripReferenceToken(value) {
+  return value
+    .trim()
+    .replace(/^[`"'(<[]+/, '')
+    .replace(/[>`"')\].,;]+$/, '');
+}
+
+function isSkippableReferenceToken(token) {
+  return !token
+    || token.includes('://')
+    || token.startsWith('mailto:')
+    || token.startsWith('#')
+    || token.startsWith('?')
+    || token.startsWith('/')
+    || /^[A-Za-z]:[\\/]/.test(token);
+}
+
+function parseReferenceToken(token) {
+  const cleaned = stripReferenceToken(token);
+  if (isSkippableReferenceToken(cleaned)) {
+    return null;
+  }
+  const lineMatch = cleaned.match(/^(.*):(\d+)$/);
+  return {
+    path: (lineMatch ? lineMatch[1] : cleaned).replace(/\\/g, '/'),
+    line: lineMatch ? Number(lineMatch[2]) : null,
+  };
+}
+
+function lineCount(path) {
+  return readFileSync(path, 'utf8').split(/\r?\n/).length;
+}
+
+function skipOptionalOperatingReference(docPath, line, refPath) {
+  const name = docPath.split(/[\\/]/).at(-1);
+  if (name !== 'AGENTS.md' && name !== 'CLAUDE.md') {
+    return false;
+  }
+  return /on demand/i.test(line)
+    || ['docs/scope.md', 'memory/current-ai-prd.md'].includes(refPath);
+}
+
+function staleReferences(target) {
+  const root = resolve(target);
+  const findings = [];
+  for (const docPath of doctorReferenceDocs(root)) {
+    const lines = readFileSync(docPath, 'utf8').split(/\r?\n/);
+    let inFence = false;
+    lines.forEach((line, index) => {
+      if (/^\s*```/.test(line)) {
+        inFence = !inFence;
+        return;
+      }
+      if (inFence) {
+        return;
+      }
+      staleReferencePattern.lastIndex = 0;
+      for (const match of line.matchAll(staleReferencePattern)) {
+        const ref = parseReferenceToken(match[1]);
+        if (!ref || skipOptionalOperatingReference(docPath, line, ref.path)) {
+          continue;
+        }
+        const candidate = resolve(root, ref.path);
+        if (!isInsideRoot(root, candidate)) {
+          continue;
+        }
+        if (!existsSync(candidate)) {
+          findings.push({
+            source: `${normalizedRelativePath(root, docPath)}:${index + 1}`,
+            reference: ref.line ? `${ref.path}:${ref.line}` : ref.path,
+            reason: 'file not found',
+          });
+          continue;
+        }
+        if (ref.line !== null && (ref.line < 1 || ref.line > lineCount(candidate))) {
+          findings.push({
+            source: `${normalizedRelativePath(root, docPath)}:${index + 1}`,
+            reference: `${ref.path}:${ref.line}`,
+            reason: `line out of range (file has ${lineCount(candidate)} lines)`,
+          });
+        }
+      }
+    });
+  }
+  return findings;
+}
+
+function formatStaleReferenceCheck(findings) {
+  if (!findings.length) {
+    return 'Stale references: PASS';
+  }
+  const shown = findings.slice(0, 10).map((finding) => `  - ${finding.source} -> ${finding.reference} (${finding.reason})`);
+  const hiddenCount = findings.length - shown.length;
+  return `Stale references: WARN
+${shown.join('\n')}${hiddenCount > 0 ? `\n  ... ${hiddenCount} more` : ''}`;
+}
+
 function runDoctor(args) {
   const target = resolve(parseTarget(args));
   const packageAssetsOk = hasPackageAssets();
@@ -603,6 +754,7 @@ function runDoctor(args) {
   const installedSkillCount = targetExists && existsSync(join(target, 'skills'))
     ? readdirSync(join(target, 'skills'), { withFileTypes: true }).filter((item) => item.isDirectory()).length
     : 0;
+  const staleReferenceFindings = targetExists ? staleReferences(target) : [];
 
   return `AI PM Dev Doctor
 
@@ -617,6 +769,7 @@ ${formatCheck('Operating layer (AGENTS.md + docs/)', operatingLayerOk, `ai-pm-de
 Installed skills: ${installedSkillCount}/${requiredSkills.length}
 ${formatCheck('Task prompt', promptExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}
 ${formatCheck('Task state', stateExists, `ai-pm-dev start "<task>" --target "${target}" --save`)}
+${formatStaleReferenceCheck(staleReferenceFindings)}
 `;
 }
 

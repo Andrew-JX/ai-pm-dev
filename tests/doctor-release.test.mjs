@@ -80,6 +80,60 @@ try {
   }
 
   {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-doctor-stale-ref-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+    writeFileSync(
+      join(target, 'docs', 'progress.md'),
+      '# Progress\n\nSee `docs/missing.md` and `docs/PROJECT_BRIEF.md:9999`.\n',
+      'utf8',
+    );
+
+    const output = runCli(['doctor', '--target', target]);
+    assert.match(output, /Stale references: WARN/);
+    assert.match(output, /docs\/missing\.md \(file not found\)/);
+    assert.match(output, /docs\/PROJECT_BRIEF\.md:9999 \(line out of range/);
+  }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-doctor-valid-ref-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+    writeFileSync(
+      join(target, 'docs', 'progress.md'),
+      '# Progress\n\nSee `docs/PROJECT_BRIEF.md:1`.\n',
+      'utf8',
+    );
+
+    const output = runCli(['doctor', '--target', target]);
+    assert.match(output, /Stale references: PASS/);
+  }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-doctor-ref-guards-'));
+    tempRoots.push(target);
+    runCli(['init', target]);
+    writeFileSync(
+      join(target, 'docs', 'progress.md'),
+      [
+        '# Progress',
+        '',
+        'External docs live at https://example.com/docs/missing.md.',
+        '',
+        '```md',
+        'docs/missing.md',
+        '```',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const output = runCli(['doctor', '--target', target]);
+    assert.match(output, /Stale references: PASS/);
+    assert.doesNotMatch(output, /docs\/missing\.md/);
+  }
+
+  {
     const output = runCli(['release-check']);
     assert.match(output, /Release Check/);
     assert.match(output, /npm test/);
