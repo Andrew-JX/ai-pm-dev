@@ -668,13 +668,14 @@ function staleReferences(target) {
   const findings = [];
   for (const docPath of doctorReferenceDocs(root)) {
     const lines = readFileSync(docPath, 'utf8').split(/\r?\n/);
-    let inFence = false;
+    let fenceMarker = '';
     lines.forEach((line, index) => {
-      if (/^\s*```/.test(line)) {
-        inFence = !inFence;
+      const fenceMatch = line.match(/^\s*(```|~~~)/);
+      if (fenceMatch && (!fenceMarker || fenceMatch[1] === fenceMarker)) {
+        fenceMarker = fenceMarker ? '' : fenceMatch[1];
         return;
       }
-      if (inFence) {
+      if (fenceMarker || /^(?: {4}|\t)/.test(line)) {
         return;
       }
       staleReferencePattern.lastIndex = 0;

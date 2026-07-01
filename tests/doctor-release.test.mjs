@@ -124,13 +124,24 @@ try {
         'docs/missing.md',
         '```',
         '',
+        '~~~md',
+        'docs/tilde-fenced-missing.md',
+        '~~~',
+        '',
+        '    docs/indented-missing.md',
+        '',
+        'A real stale link still reports docs/missing2.md.',
+        '',
       ].join('\n'),
       'utf8',
     );
 
     const output = runCli(['doctor', '--target', target]);
-    assert.match(output, /Stale references: PASS/);
+    assert.match(output, /Stale references: WARN/);
     assert.doesNotMatch(output, /docs\/missing\.md/);
+    assert.doesNotMatch(output, /docs\/tilde-fenced-missing\.md/);
+    assert.doesNotMatch(output, /docs\/indented-missing\.md/);
+    assert.match(output, /docs\/missing2\.md \(file not found\)/);
   }
 
   {
