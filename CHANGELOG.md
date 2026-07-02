@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 — 2026-07-02 (Dev Plan + Ship stages)
+
+Extend the product loop from a gate-worthy PRD through a reviewable build plan and evidence-based ship readiness.
+
+- Add `ai-pm-dev plan materialize`, `ai-pm-dev plan check`, and `ai-pm-dev plan handoff`: host agents produce the dev-plan JSON, and the CLI anchors it to the latest PRD, writes session/project artifacts, advances state, and gates the plan. The Dev Plan gate requires every PRD must-have to map to a slice, the first slice to prove the one thing, PRD non-goals to stay excluded, every slice to include verification, and slices touching more than five files to include a split reason.
+- Add read-only Web visibility for Dev Plan: the workbench displays CLI-written `dev-plan.md` and `dev-plan-quality-report.json`, and after PRD PASS points the next action to `dev-planner -> ai-pm-dev plan materialize -> ai-pm-dev plan check --strict`.
+- Add `ai-pm-dev ship materialize`, `ai-pm-dev ship check`, and `ai-pm-dev ship handoff`: the Ship gate is evidence-oriented, requiring the PRD one thing to be shipped with no waiver substitute, acceptance and verification evidence to be non-empty, must-haves to be shipped or explicitly deferred, non-goals to be held, rollback to be documented, and blockers to be cleared or waived.
+- Add read-only Web visibility for Ship: the workbench displays CLI-written `ship-check.md` and `ship-quality-report.json`, and after Dev Plan PASS points the next action to `release-builder -> ai-pm-dev ship materialize -> ai-pm-dev ship check --strict`. The `ship` command namespace is kept distinct from the package self-checking `release-check`.
+- Add `doctor` stale-reference warnings for broken local `file` / `file:line` references in docs while ignoring fenced code, indented code, and URLs.
+- Harden AI collaboration discipline in `code-review`, `dev-planner`, and `CLAUDE.md` with clearer review routing, risk layering, and source-grounded review expectations.
+
 ## 1.3.0 — 2026-06-29 (A: Dev Plan stage)
 
 Extend the delivery chain from gate-worthy PRD to a deterministic, reviewable MVP build plan.
