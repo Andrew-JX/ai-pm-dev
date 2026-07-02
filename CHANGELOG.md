@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 - 2026-07-03 (review-packet + prd --json + type-aware gates)
+
+Prepare the local review workflow for v1.5.0 with a review packet command, full PRD JSON input, and type-aware PRD gate reporting.
+
+- Add `ai-pm-dev review-packet [--target <path>] [--base <ref>] [--out <file>]`: a local, zero-network review packet that captures branch and diff context, uses a three-dot diff with an 800-line truncation budget, marks executor-reported gates as context that reviewers must independently rerun, includes plan and ship artifacts, and derives a reviewer rerun checklist from real slices and must-haves. The command is read-only except for the explicit `--out` file.
+- Add `ai-pm-dev prd --json`: stdin can now provide a complete 14-field PRD object keyed by answer name. It fails loudly for non-object input, unknown keys, and array values; `--quick --json` is a usage error; existing line-based input and `--quick` behavior are unchanged.
+- Fix type-aware PRD gate consistency for non-AI project types such as `consumer` and `internal-tool`: AI-only skipped fields are recorded as `Not applicable (non-AI product type).` and no longer trigger recommended WARNs. `ai-tool` and `general` behavior is unchanged.
+
 ## 1.4.0 - 2026-07-02 (Ship stage + doctor stale-ref + review discipline)
 
 Extend the product loop from a reviewable build plan to evidence-based ship readiness, and tighten the supporting review/doctor discipline.
