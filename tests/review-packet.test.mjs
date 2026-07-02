@@ -1,17 +1,27 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildReviewPacket } from '../workflow-core/review-packet.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const cliPath = join(repoRoot, 'bin', 'ai-pm-dev.mjs');
 
 function git(repo, args) {
   return execFileSync('git', ['-C', repo, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function runCli(args, options = {}) {
+  return execFileSync(process.execPath, [cliPath, ...args], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    input: options.input ?? '',
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
 
@@ -146,6 +156,12 @@ try {
     assert.match(packet, /Non-goal still excluded: No network calls/);
     assert.match(packet, /Acceptance evidence independently holds: Reviewer can start from packet alone/);
     assert.match(packet, /Rollback is credible and actionable: Revert the review-packet command commit/);
+
+    const cliPacket = runCli(['review-packet', '--target', target]);
+    assert.match(cliPacket, /# Review Packet/);
+    assert.match(cliPacket, /Current branch: feature\/review-packet/);
+    assert.match(cliPacket, /Diff range: master\.\.\.HEAD/);
+    assert.match(cliPacket, /Dev Plan Gate: executor-reported PASS/);
   }
 
   {
@@ -167,6 +183,20 @@ try {
     assert.match(packet, /Diff truncated/);
     assert.match(packet, /omitted \d+ line\(s\)/);
     assert.match(packet, /Rerun locally: `git -C ".*" diff master\.\.\.HEAD`/);
+  }
+
+  {
+    const target = setupRepo('ai-pm-dev-review-packet-out-');
+    tempRoots.push(target);
+    addSessionFixture(target);
+    const outPath = join(target, 'packet.md');
+    const stdout = runCli(['review-packet', '--target', target, '--out', outPath]);
+    assert.match(stdout, /Review packet written:/);
+    assert.equal(existsSync(outPath), true);
+    const packet = readFileSync(outPath, 'utf8');
+    assert.match(packet, /# Review Packet/);
+    assert.match(packet, /## Safety Notice/);
+    assert.doesNotMatch(stdout, /## Safety Notice/);
   }
 
 } finally {

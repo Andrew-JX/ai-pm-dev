@@ -49,6 +49,7 @@ import {
   buildShipCheckMarkdown,
   validateShipCheckStructure,
 } from '../workflow-core/ship-check.mjs';
+import { buildReviewPacket } from '../workflow-core/review-packet.mjs';
 import { createAnthropicPrdClient } from '../llm/anthropic-client.mjs';
 import { createClarificationState, runPrdClarificationTurn } from '../llm/prd-clarifier.mjs';
 import { DEFAULT_REASONING_MODEL, resolveModelAlias } from '../llm/models.mjs';
@@ -83,6 +84,7 @@ Usage:
   ai-pm-dev ship materialize [--target <path>] < ship-check.json
   ai-pm-dev ship check [--strict] [--target <path>]
   ai-pm-dev ship handoff [--target <path>]
+  ai-pm-dev review-packet [--target <path>] [--base <ref>] [--out <file>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
   ai-pm-dev decision-record "<title>" [--why <reason>] [--goals <goals>] [--non-goals <non-goals>] [--test <plan>] [--rollback <plan>] [--target <path>]
@@ -116,6 +118,7 @@ Commands:
   prd            Run an interactive PM interview and generate AI-PRD assets.
   plan           Materialize, check, or print the latest PRD-linked dev plan.
   ship           Materialize, check, or print the latest PRD-linked ship check.
+  review-packet  Assemble a local-only Markdown review packet from git and PRD artifacts.
   start          Route a task, generate the AI prompt, and optionally save task state.
   decide         Append a one-line decision to docs/decision-log.md.
   decision-record Write a KEP-lite decision record for a larger change.
@@ -414,6 +417,25 @@ Target: ${target}
 
 ${blocks}
 `;
+}
+
+function runReviewPacket(args) {
+  const target = resolve(parseTarget(args));
+  const baseRef = parseValue(args, '--base');
+  const outValue = parseValue(args, '--out');
+  if (args.includes('--out') && !outValue) {
+    throw new Error('Usage: ai-pm-dev review-packet [--target <path>] [--base <ref>] [--out <file>]');
+  }
+
+  const packet = buildReviewPacket({ target, baseRef });
+  if (!outValue) {
+    return packet;
+  }
+
+  const outPath = resolve(process.cwd(), outValue);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, packet, 'utf8');
+  return `Review packet written: ${outPath}\n`;
 }
 
 const workflowSkillNames = [
@@ -2753,6 +2775,8 @@ try {
     process.stdout.write(runInstallOwnership(args));
   } else if (command === 'review-route') {
     process.stdout.write(runReviewRoute(args));
+  } else if (command === 'review-packet') {
+    process.stdout.write(runReviewPacket(args));
   } else if (command === 'skill') {
     process.stdout.write(runSkill(args));
   } else if (command === 'workflow') {
