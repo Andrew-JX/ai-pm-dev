@@ -50,9 +50,15 @@ try {
     assert.doesNotMatch(output, /What should AI do/);
     const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
     const answersJson = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
-    assert.equal(answersJson.aiBoundaries, '');
-    assert.equal(answersJson.deterministicRules, '');
-    assert.equal(answersJson.trustMechanism, '');
+    assert.equal(answersJson.aiBoundaries, 'Not applicable (non-AI product type).');
+    assert.equal(answersJson.deterministicRules, 'Not applicable (non-AI product type).');
+    assert.equal(answersJson.trustMechanism, 'Not applicable (non-AI product type).');
+
+    const checkOutput = runCli(['prd', 'check', '--target', target]);
+    assert.doesNotMatch(checkOutput, /WARN AI boundary declared/);
+    assert.doesNotMatch(checkOutput, /WARN Deterministic rules declared/);
+    assert.match(checkOutput, /PASS AI boundary declared/);
+    assert.match(checkOutput, /PASS Deterministic rules declared/);
   }
 
   {

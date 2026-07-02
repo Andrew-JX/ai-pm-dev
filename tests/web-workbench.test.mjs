@@ -145,6 +145,22 @@ function consumerPrdInput() {
   ].join('\n')}\n`;
 }
 
+function consumerWarnPrdInput() {
+  return `${[
+    'A playful dating plan mini-app',
+    'Young people who want to date',
+    'Quickly agree on a fun date plan',
+    'Chatting on WeChat',
+    'Pick date, time, food, activity',
+    'Date picker; food picker; activity picker',
+    'Generate a shareable date plan',
+    'No accounts or backend in v1',
+    'No backend; can bind to phone calendar',
+    'Keep it lighthearted; avoid pressuring users',
+    'People feel confident about the plan',
+  ].join('\n')}\n`;
+}
+
 try {
   {
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-empty-'));
@@ -306,9 +322,21 @@ try {
     runCli(['prd', 'check', '--target', target]);
 
     const state = readProjectState(target);
+    assert.equal(state.qualityGate.overall, 'PASS');
+    assert.equal(state.currentPhase?.id, 'plan');
+    assert.equal(state.nextAction.command, 'dev-planner -> ai-pm-dev plan materialize -> ai-pm-dev plan check --strict');
+  }
+
+  {
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-warn-next-action-'));
+    tempRoots.push(target);
+    runCli(['prd', '--target', target, '--type', 'consumer'], { input: consumerWarnPrdInput() });
+    runCli(['prd', 'check', '--target', target]);
+
+    const state = readProjectState(target);
     assert.equal(state.qualityGate.overall, 'WARN');
     assert.equal(state.currentPhase?.id, 'plan');
-    assert.equal(state.nextAction.command, 'ai-pm-dev checkpoint "plan"');
+    assert.equal(state.nextAction.command, `ai-pm-dev checkpoint "${state.currentPhase.id}"`);
   }
 
   {

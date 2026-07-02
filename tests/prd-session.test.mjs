@@ -205,7 +205,7 @@ try {
   }
 
   {
-    // --type consumer skips AI-specific questions; missing AI boundary becomes a warning.
+    // --type consumer skips AI-specific questions and records them as not applicable.
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-type-'));
     tempRoots.push(target);
 
@@ -225,8 +225,55 @@ try {
     const output = runCli(['prd', '--target', target, '--type', 'consumer'], { input: `${answers}\n` });
     assert.match(output, /Interactive PRD session complete/);
 
+    const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const answersJson = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
+    assert.equal(answersJson.deterministicRules, 'Not applicable (non-AI product type).');
+    assert.equal(answersJson.aiBoundaries, 'Not applicable (non-AI product type).');
+    assert.equal(answersJson.trustMechanism, 'Not applicable (non-AI product type).');
+    const prd = readFileSync(join(session, 'ai-prd.md'), 'utf8');
+    assert.match(prd, /## AI Usage Boundaries/);
+    assert.match(prd, /Not applicable \(non-AI product type\)\./);
+
+    const checkOutput = runCli(['prd', 'check', '--target', target]);
+    assert.doesNotMatch(checkOutput, /WARN AI boundary declared/);
+    assert.doesNotMatch(checkOutput, /WARN Deterministic rules declared/);
+    assert.match(checkOutput, /PASS AI boundary declared/);
+    assert.match(checkOutput, /PASS Deterministic rules declared/);
+  }
+
+  {
+    // --type ai-tool keeps AI-specific questions active; blanks stay blank.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-ai-type-'));
+    tempRoots.push(target);
+    const answers = [
+      'AI fitness logging tool',
+      'Fitness beginners',
+      'They cannot tell whether training improves',
+      'Scattered notes',
+      'Log workout, review progress, receive AI summary',
+      'Workout logging; progress trend; weekly summary',
+      'Workout logging',
+      'No social features in v1',
+      'Workout sets, reps, weight',
+      '',
+      '',
+      '',
+      'Protect health data',
+      'A beginner understands weekly progress within five minutes',
+    ].join('\n');
+
+    const output = runCli(['prd', '--target', target, '--type', 'ai-tool'], { input: `${answers}\n` });
+    assert.match(output, /10\. Which calculations or decisions must be deterministic/);
+    assert.match(output, /11\. What should AI do/);
+    const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const answersJson = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
+    assert.equal(answersJson.deterministicRules, '');
+    assert.equal(answersJson.aiBoundaries, '');
+    assert.equal(answersJson.trustMechanism, '');
+
     const checkOutput = runCli(['prd', 'check', '--target', target]);
     assert.match(checkOutput, /WARN AI boundary declared/);
+    assert.match(checkOutput, /WARN Deterministic rules declared/);
   }
 
   {
@@ -271,6 +318,129 @@ try {
     assert.match(followUps, /Adaptive Follow-up Questions/);
     assert.match(followUps, /List exactly 1-3 v1 must-haves/);
     assert.match(followUps, /If only one feature shipped this week/);
+  }
+
+  {
+    // --json accepts full keyed PRD input and fills missing canonical fields.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-json-'));
+    tempRoots.push(target);
+
+    const input = JSON.stringify({
+      idea: 'AI fitness logging tool',
+      targetUsers: 'Fitness beginners',
+      painPoints: 'They cannot tell whether training improves',
+      coreWorkflow: 'Log workout, review progress, receive AI summary',
+      mvpScope: 'Workout logging; progress trend; weekly summary',
+      oneThing: 'Workout logging',
+      nonGoals: 'No social features in v1',
+      dataModel: 'Workout sets, reps, weight',
+      deterministicRules: 'Volume must be deterministic',
+      aiBoundaries: 'AI only summarizes',
+      trustMechanism: 'Show the workouts used',
+      risks: 'Protect health data',
+      acceptanceCriteria: 'A beginner understands weekly progress within five minutes',
+    });
+
+    const output = runCli(['prd', '--target', target, '--json'], { input });
+    assert.match(output, /Interactive PRD session complete/);
+    const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const answers = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
+    assert.equal(answers.idea, 'AI fitness logging tool');
+    assert.equal(answers.currentWorkaround, '');
+    assert.equal(answers.aiBoundaries, 'AI only summarizes');
+
+    const checkOutput = runCli(['prd', 'check', '--target', target]);
+    assert.match(checkOutput, /Overall: PASS/);
+  }
+
+  {
+    // Full JSON mode fails loud on malformed JSON and unknown fields.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-json-bad-'));
+    tempRoots.push(target);
+
+    let failed = false;
+    let stderr = '';
+    try {
+      runCli(['prd', '--target', target, '--json'], { input: '{"idea":' });
+    } catch (error) {
+      failed = true;
+      stderr = error.stderr || '';
+    }
+    assert.equal(failed, true, 'bad full PRD JSON should fail cleanly');
+    assert.match(stderr, /Invalid JSON stdin for full PRD input/);
+
+    failed = false;
+    stderr = '';
+    try {
+      runCli(['prd', '--target', target, '--json'], { input: '{"idea":"Tool","extra":"nope"}' });
+    } catch (error) {
+      failed = true;
+      stderr = error.stderr || '';
+    }
+    assert.equal(failed, true, 'unknown full PRD JSON keys should fail cleanly');
+    assert.match(stderr, /Unknown PRD JSON field\(s\): extra/);
+
+    failed = false;
+    stderr = '';
+    try {
+      runCli(['prd', '--target', target, '--json'], { input: '{"idea":["Tool"]}' });
+    } catch (error) {
+      failed = true;
+      stderr = error.stderr || '';
+    }
+    assert.equal(failed, true, 'array full PRD JSON values should fail cleanly');
+    assert.match(stderr, /PRD JSON field "idea" must be a scalar value/);
+  }
+
+  {
+    // Non-json line mode keeps treating JSON-looking text as the first line answer.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-line-json-looking-'));
+    tempRoots.push(target);
+    const answers = [
+      '{"idea":"Literal JSON-looking idea"}',
+      'Users',
+      'Pain',
+    ].join('\n');
+
+    runCli(['prd', '--target', target], { input: `${answers}\n` });
+    const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const answersJson = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
+    assert.equal(answersJson.idea, '{"idea":"Literal JSON-looking idea"}');
+  }
+
+  {
+    // --quick keeps accepting keyed JSON for its existing three-field path.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-quick-json-'));
+    tempRoots.push(target);
+    const output = runCli(['prd', '--target', target, '--quick'], {
+      input: JSON.stringify({
+        idea: 'A small tool',
+        targetUsers: 'Knowledge workers',
+        painPoints: 'Manual work is slow',
+      }),
+    });
+    assert.match(output, /Quick mode: this PRD is intentionally thin/);
+    const session = JSON.parse(readFileSync(join(target, '.ai-pm-dev', 'state.json'), 'utf8')).prdSessionPath;
+    const answers = JSON.parse(readFileSync(join(session, 'answers.json'), 'utf8'));
+    assert.equal(answers.idea, 'A small tool');
+    assert.equal(answers.targetUsers, 'Knowledge workers');
+    assert.equal(answers.painPoints, 'Manual work is slow');
+  }
+
+  {
+    // --quick and --json are distinct input contracts.
+    const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-quick-json-error-'));
+    tempRoots.push(target);
+    let failed = false;
+    let stderr = '';
+    try {
+      runCli(['prd', '--target', target, '--quick', '--json'], { input: '{}' });
+    } catch (error) {
+      failed = true;
+      stderr = error.stderr || '';
+    }
+    assert.equal(failed, true, '--quick --json should fail as a usage error');
+    assert.match(stderr, /cannot be combined with --quick/);
   }
 
   {

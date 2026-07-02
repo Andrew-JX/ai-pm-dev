@@ -35,6 +35,7 @@ import {
 } from '../workflow-core/dev-plan.mjs';
 import { evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import {
+  parseFullPrdJsonStdin,
   parseQuickPrdStdin,
   prdQuestions,
   projectTypes,
@@ -71,7 +72,7 @@ function printHelp() {
 
 Usage:
   ai-pm-dev init <target> [--dry-run] [--force] [--include-readme]
-  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>] [--quick]
+  ai-pm-dev prd [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--from-note <file>] [--quick] [--json]
   ai-pm-dev prd clarify [--target <path>] [--lang <zh|en>] [--type <ai-tool|saas|consumer|internal-tool>] [--model <opus|sonnet>] [--from-note <file>] [--json-turn]
   ai-pm-dev prd status [--target <path>]
   ai-pm-dev prd check [--strict] [--target <path>]
@@ -1786,9 +1787,17 @@ function writePrdAssets(target, answers, sourceNote = '', activeQuestions = prdQ
     throw new Error(`Target directory does not exist: ${target}`);
   }
 
-  // Questions skipped by project-type filtering leave keys undefined; normalize to ''
-  // so builders and section() never crash on a missing field.
+  const activeKeys = new Set(activeQuestions.map((question) => question.key));
+  const nonAiTypeMarker = 'Not applicable (non-AI product type).';
+
+  // Questions skipped by project-type filtering are explicit not-applicable answers.
+  // Active unanswered questions stay blank so follow-up generation still catches them.
   for (const question of prdQuestions) {
+    const skippedByType = !activeKeys.has(question.key) && question.aiRelated;
+    if (skippedByType && !String(answers[question.key] ?? '').trim()) {
+      answers[question.key] = nonAiTypeMarker;
+      continue;
+    }
     if (answers[question.key] === undefined) {
       answers[question.key] = '';
     }
@@ -1941,6 +1950,10 @@ async function runPrdInterview(args) {
 
   // --quick captures only who/what/why and hands the real interrogation to the LLM.
   const quick = args.includes('--quick');
+  const jsonInput = args.includes('--json');
+  if (quick && jsonInput) {
+    throw new Error('Usage: ai-pm-dev prd --json cannot be combined with --quick.');
+  }
   const quickKeys = new Set(['idea', 'targetUsers', 'painPoints']);
 
   // When the idea comes from a note file, skip the idea question and pre-fill it.
@@ -1952,7 +1965,7 @@ async function runPrdInterview(args) {
 
   if (!process.stdin.isTTY) {
     const stdin = readFileSync(0, 'utf8');
-    const parsedStdin = quick ? parseQuickPrdStdin(stdin) : { kind: 'lines', lines: stdin.split(/\r?\n/) };
+    const parsedStdin = jsonInput ? parseFullPrdJsonStdin(stdin) : (quick ? parseQuickPrdStdin(stdin) : { kind: 'lines', lines: stdin.split(/\r?\n/) });
     const keyedInput = parsedStdin.kind === 'json' ? parsedStdin.values : null;
     const lines = parsedStdin.kind === 'lines' ? parsedStdin.lines : [];
     const answers = notedIdea ? { idea: notedIdea } : {};

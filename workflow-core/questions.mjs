@@ -115,3 +115,35 @@ export function parseQuickPrdStdin(stdin) {
   }
   return { kind: 'lines', lines: stdin.split(/\r?\n/) };
 }
+
+export function parseFullPrdJsonStdin(stdin) {
+  let values;
+  try {
+    values = JSON.parse(stdin.trim());
+  } catch {
+    throw new Error('Invalid JSON stdin for full PRD input.');
+  }
+  if (!values || Array.isArray(values) || typeof values !== 'object') {
+    throw new Error('Full PRD JSON stdin must be an object keyed by PRD field.');
+  }
+
+  const allowedKeys = new Set(prdQuestions.map((question) => question.key));
+  const unknownKeys = Object.keys(values).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length) {
+    throw new Error(`Unknown PRD JSON field(s): ${unknownKeys.join(', ')}`);
+  }
+
+  const answers = {};
+  for (const question of prdQuestions) {
+    const value = values[question.key];
+    if (value === undefined || value === null) {
+      answers[question.key] = '';
+      continue;
+    }
+    if (Array.isArray(value) || typeof value === 'object') {
+      throw new Error(`PRD JSON field "${question.key}" must be a scalar value.`);
+    }
+    answers[question.key] = String(value).trim();
+  }
+  return { kind: 'json', values: answers };
+}
