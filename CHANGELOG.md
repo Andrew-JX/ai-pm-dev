@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0 - 2026-07-04 (feedback → iterate loop)
+
+Close the post-ship learning loop by turning product feedback into deterministic iteration planning and PRD seeding.
+
+- Add project-level product feedback capture with an explicit open/dispositioned lifecycle: feedback records live as product evidence, keep their status visible until triaged, and stay distinct from bugs, clarifying asks, and general notes.
+- Add `ai-pm-dev iterate materialize`, `ai-pm-dev iterate check`, and `ai-pm-dev iterate seed`: host agents triage open feedback through `iterate-planner`, the CLI materializes the iteration report, derives `nextPrdSeed`, and gates the result with objective checks while keeping the flow local and zero-LLM.
+- Close the loop from learning to the next PRD with `ai-pm-dev iterate seed | ai-pm-dev prd --json`, so accepted feedback can become structured PRD input without hidden network calls or browser-only state.
+
 ## 1.5.0 - 2026-07-03 (review-packet + prd --json + type-aware gates)
 
 Prepare the local review workflow for v1.5.0 with a review packet command, full PRD JSON input, and type-aware PRD gate reporting.
