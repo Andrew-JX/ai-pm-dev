@@ -171,6 +171,7 @@ try {
     assert.equal(state.latestSession, null);
     assert.equal(state.qualityGate.overall, 'UNKNOWN');
     assert.equal(state.shipGate.overall, 'UNKNOWN');
+    assert.equal(state.iterateGate.overall, 'UNKNOWN');
     assert.equal(state.nextAction.command, 'ai-pm-dev init .');
     assert.ok(state.artifacts.some((artifact) => artifact.relativePath === 'docs/scope.md' && artifact.status === 'missing'));
   }
@@ -299,6 +300,7 @@ try {
 
     const afterShip = readProjectState(target);
     assert.equal(afterShip.shipGate.overall, 'PASS');
+    assert.equal(afterShip.iterateGate.overall, 'UNKNOWN');
     assert.equal(afterShip.phases.find((phase) => phase.id === 'ship')?.status, 'done');
     assert.equal(afterShip.artifacts.find((artifact) => artifact.id === 'ship-check')?.status, 'filled');
     assert.equal(afterShip.artifacts.find((artifact) => artifact.id === 'ship-gate-report')?.status, 'filled');

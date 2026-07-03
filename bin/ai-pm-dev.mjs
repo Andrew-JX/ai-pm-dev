@@ -33,7 +33,13 @@ import {
   buildDevPlanMarkdown,
   validateDevPlanStructure,
 } from '../workflow-core/dev-plan.mjs';
-import { evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import {
+  evaluateDevPlan,
+  evaluateIterate,
+  evaluatePrd,
+  evaluateShipCheck,
+  scoreChecks,
+} from '../workflow-core/prd-gates.mjs';
 import {
   parseFullPrdJsonStdin,
   parseQuickPrdStdin,
@@ -49,6 +55,16 @@ import {
   buildShipCheckMarkdown,
   validateShipCheckStructure,
 } from '../workflow-core/ship-check.mjs';
+import {
+  anchorIterate,
+  buildIterateMarkdown,
+  createFeedbackEntry,
+  dispositionFeedbackLog,
+  nextFeedbackId,
+  normalizeProductFeedbackLog,
+  openFeedbackEntries,
+  validateIterateStructure,
+} from '../workflow-core/iterate.mjs';
 import { buildReviewPacket } from '../workflow-core/review-packet.mjs';
 import { createAnthropicPrdClient } from '../llm/anthropic-client.mjs';
 import { createClarificationState, runPrdClarificationTurn } from '../llm/prd-clarifier.mjs';
@@ -66,6 +82,7 @@ const requiredSkills = [
   'bug-fixer',
   'code-review',
   'release-builder',
+  'iterate-planner',
 ];
 
 function printHelp() {
@@ -84,6 +101,10 @@ Usage:
   ai-pm-dev ship materialize [--target <path>] < ship-check.json
   ai-pm-dev ship check [--strict] [--target <path>]
   ai-pm-dev ship handoff [--target <path>]
+  ai-pm-dev feedback add "<signal>" --source <source> [--kind <user-reaction|usage|request>] [--target <path>]
+  ai-pm-dev iterate materialize [--target <path>] < iterate.json
+  ai-pm-dev iterate check [--strict] [--target <path>]
+  ai-pm-dev iterate seed [--target <path>]
   ai-pm-dev review-packet [--target <path>] [--base <ref>] [--out <file>]
   ai-pm-dev start "<task>" [--type <type>] [--target <path>] [--save]
   ai-pm-dev decide "<decision>" [--why <reason>] [--target <path>]
@@ -118,6 +139,8 @@ Commands:
   prd            Run an interactive PM interview and generate AI-PRD assets.
   plan           Materialize, check, or print the latest PRD-linked dev plan.
   ship           Materialize, check, or print the latest PRD-linked ship check.
+  feedback       Capture post-ship product feedback for next-round iteration.
+  iterate        Materialize and gate a next-PRD seed from triaged feedback.
   review-packet  Assemble a local-only Markdown review packet from git and PRD artifacts.
   start          Route a task, generate the AI prompt, and optionally save task state.
   decide         Append a one-line decision to docs/decision-log.md.
@@ -2373,6 +2396,18 @@ function readShipCheckStdin() {
   }
 }
 
+function readIterateStdin() {
+  const raw = readFileSync(0, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Usage: ai-pm-dev iterate materialize [--target <path>] < iterate.json');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON stdin for iterate materialize.');
+  }
+}
+
 function prdAnchoredPlan(plan, answers, sessionPath) {
   return {
     ...plan,
@@ -2409,6 +2444,14 @@ function requireShipCheckStructure(raw) {
     throw new Error(`Invalid ship check structure:\n- ${validation.errors.join('\n- ')}`);
   }
   return validation.check;
+}
+
+function requireIterateStructure(raw) {
+  const validation = validateIterateStructure(raw);
+  if (!validation.ok) {
+    throw new Error(`Invalid iterate structure:\n- ${validation.errors.join('\n- ')}`);
+  }
+  return validation.iterate;
 }
 
 function checkLines(checks) {
@@ -2608,7 +2651,7 @@ function loadLatestShipCheck(target) {
     throw new Error(`No ship check found for latest PRD session. Run: ai-pm-dev ship materialize --target "${target}" < ship-check.json`);
   }
   const check = requireShipCheckStructure(JSON.parse(readFileSync(shipCheckJsonPath, 'utf8')));
-  return { sessionPath, latestDevPlanPath, answers, check };
+  return { sessionPath, latestDevPlanPath, shipCheckJsonPath, answers, check };
 }
 
 function runShipCheck(args) {
@@ -2675,6 +2718,227 @@ function runShip(args) {
     return runShipHandoff(rest);
   }
   throw new Error('Usage: ai-pm-dev ship materialize [--target <path>] < ship-check.json | ship check [--strict] [--target <path>] | ship handoff [--target <path>]');
+}
+
+function productFeedbackPath(target) {
+  return join(target, '.ai-pm-dev', 'feedback', 'product-feedback.json');
+}
+
+function iterateSeedPath(target) {
+  return join(target, '.ai-pm-dev', 'feedback', 'iterate-seed.json');
+}
+
+function readProductFeedback(target) {
+  const path = productFeedbackPath(target);
+  if (!existsSync(path)) {
+    return normalizeProductFeedbackLog({});
+  }
+  return normalizeProductFeedbackLog(JSON.parse(readFileSync(path, 'utf8')));
+}
+
+function writeProductFeedback(target, log) {
+  const path = productFeedbackPath(target);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(normalizeProductFeedbackLog(log), null, 2)}\n`, 'utf8');
+  return path;
+}
+
+function latestShippedSessionPath(target) {
+  const sessionPath = latestPrdSession(target);
+  if (!sessionPath) {
+    return '';
+  }
+  return existsSync(join(sessionPath, 'ship-check.json')) ? sessionPath : '';
+}
+
+function runFeedback(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand !== 'add') {
+    throw new Error('Usage: ai-pm-dev feedback add "<signal>" --source <source> [--kind <user-reaction|usage|request>] [--target <path>]');
+  }
+  const usage = 'Usage: ai-pm-dev feedback add "<signal>" --source <source> [--kind <user-reaction|usage|request>] [--target <path>]';
+  const signal = appendMessage(rest, usage);
+  const target = resolve(parseTarget(rest));
+  const source = requireFlag(rest, '--source', usage);
+  const kind = parseValue(rest, '--kind') || 'request';
+  if (!['user-reaction', 'usage', 'request'].includes(kind)) {
+    throw new Error('Feedback kind must be one of: user-reaction, usage, request.');
+  }
+
+  const log = readProductFeedback(target);
+  const entry = createFeedbackEntry({
+    id: nextFeedbackId(log),
+    signal,
+    source,
+    kind,
+    shipSessionPath: latestShippedSessionPath(target),
+    openedAt: nowForSession().toISOString(),
+  });
+  log.feedback.push(entry);
+  const path = writeProductFeedback(target, log);
+  return `Captured product feedback -> ${path}
+Feedback: ${entry.id} (${entry.kind})
+Status: open
+`;
+}
+
+function loadLatestIterate(target) {
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const shipCheckPath = join(sessionPath, 'ship-check.json');
+  if (!existsSync(shipCheckPath)) {
+    throw new Error(`No ship check found for latest PRD session. Run: ai-pm-dev ship materialize --target "${target}" < ship-check.json`);
+  }
+  const iteratePath = join(sessionPath, 'iterate.json');
+  if (!existsSync(iteratePath)) {
+    throw new Error(`No iterate packet found for latest PRD session. Run: ai-pm-dev iterate materialize --target "${target}" < iterate.json`);
+  }
+  const iterate = requireIterateStructure(JSON.parse(readFileSync(iteratePath, 'utf8')));
+  return { sessionPath, answers, shipCheckPath, iteratePath, iterate };
+}
+
+function runIterateMaterialize(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, shipCheckJsonPath, answers } = loadLatestShipCheck(target);
+  const rawIterate = readIterateStdin();
+  const feedbackLog = readProductFeedback(target);
+  const openFeedbackIds = openFeedbackEntries(feedbackLog).map((entry) => entry.id);
+  const iterate = anchorIterate(requireIterateStructure(rawIterate), {
+    answers,
+    sessionPath,
+    shipCheckPath: shipCheckJsonPath,
+    openFeedbackIds,
+  });
+
+  const iterateJson = `${JSON.stringify(iterate, null, 2)}\n`;
+  const iterateMarkdown = buildIterateMarkdown(iterate, feedbackLog.feedback);
+  const iterateJsonPath = join(sessionPath, 'iterate.json');
+  const iterateMarkdownPath = join(sessionPath, 'iterate.md');
+  const seedPath = iterateSeedPath(target);
+  const memoryDir = join(target, 'memory');
+  const stateDir = join(target, '.ai-pm-dev');
+  const checks = evaluateIterate(iterate, {
+    sessionPath,
+    latestSessionPath: sessionPath,
+    latestShipCheckPath: shipCheckJsonPath,
+    answers,
+    feedbackLog,
+  });
+  const score = scoreChecks(checks);
+
+  mkdirSync(sessionPath, { recursive: true });
+  mkdirSync(dirname(seedPath), { recursive: true });
+  mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(iterateJsonPath, iterateJson, 'utf8');
+  writeFileSync(iterateMarkdownPath, iterateMarkdown, 'utf8');
+  writeFileSync(seedPath, `${JSON.stringify(iterate.nextPrdSeed, null, 2)}\n`, 'utf8');
+  writeFileSync(join(memoryDir, 'current-task-prompt.md'), `# Next PRD Seed
+
+Run:
+
+\`\`\`sh
+ai-pm-dev iterate seed --target "${target}" | ai-pm-dev prd --json --target "${target}"
+\`\`\`
+
+Seed source: ${seedPath}
+`, 'utf8');
+  writeFileSync(join(stateDir, 'state.json'), `${JSON.stringify({
+    version,
+    task: iterate.nextPrdSeed.idea || answers.idea || '',
+    skill: 'iterate-planner',
+    phase: 'Iterate',
+    skillPath: 'skills/iterate-planner/SKILL.md',
+    nextStep: 'Run ai-pm-dev iterate check --strict, then feed iterate seed into prd --json.',
+    prdSessionPath: sessionPath,
+    updatedAt: new Date().toISOString(),
+  }, null, 2)}\n`, 'utf8');
+  appendCheckpoint(target, 'iterate', iterate.nextPrdSeed.mvpScope || iterate.nextPrdSeed.idea);
+
+  let lifecycleNote = 'Feedback lifecycle unchanged because required iterate gates are not passing yet.';
+  if (score.overall !== 'FAIL') {
+    const updatedLog = dispositionFeedbackLog(feedbackLog, iterate, {
+      iteratePath: iterateJsonPath,
+      dispositionedAt: nowForSession().toISOString(),
+    });
+    writeProductFeedback(target, updatedLog);
+    lifecycleNote = 'Triaged open feedback marked dispositioned.';
+  }
+
+  return `Iterate packet materialized
+
+Session: ${sessionPath}
+Artifacts:
+- ${iterateJsonPath}
+- ${iterateMarkdownPath}
+- ${seedPath}
+
+${lifecycleNote}
+
+Next: ai-pm-dev iterate check --strict --target "${target}"
+`;
+}
+
+function runIterateCheck(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers, shipCheckPath, iterate } = loadLatestIterate(target);
+  const feedbackLog = readProductFeedback(target);
+  const checks = evaluateIterate(iterate, {
+    sessionPath,
+    latestSessionPath: sessionPath,
+    latestShipCheckPath: shipCheckPath,
+    answers,
+    feedbackLog,
+  });
+  const score = scoreChecks(checks);
+  const reportPath = join(sessionPath, 'iterate-quality-report.md');
+  const reportJsonPath = join(sessionPath, 'iterate-quality-report.json');
+  const report = buildQualityReportMarkdown({ idea: iterate.nextPrdSeed.idea || answers.idea || 'Next iteration' }, checks, score, {
+    title: 'Iterate Quality Report',
+    generatedBy: 'ai-pm-dev iterate check',
+  });
+  writeFileSync(reportPath, report, 'utf8');
+  writeFileSync(reportJsonPath, `${JSON.stringify(buildQualityReportJson({ idea: iterate.nextPrdSeed.idea || answers.idea || '' }, checks, score, {
+    generatedBy: 'ai-pm-dev iterate check',
+    sessionPath,
+  }), null, 2)}\n`, 'utf8');
+
+  const strict = args.includes('--strict');
+  if (strict && score.overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  return `Iterate Quality Check${strict ? ' (strict)' : ''}
+
+Session: ${sessionPath}
+Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
+
+${checkLines(checks).join('\n')}
+
+Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: exiting non-zero because required checks failed.' : ''}
+`;
+}
+
+function runIterateSeed(args) {
+  const target = resolve(parseTarget(args));
+  const seedPath = iterateSeedPath(target);
+  if (!existsSync(seedPath)) {
+    throw new Error(`No iterate seed found. Run: ai-pm-dev iterate materialize --target "${target}" < iterate.json`);
+  }
+  return readFileSync(seedPath, 'utf8');
+}
+
+function runIterate(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'materialize') {
+    return runIterateMaterialize(rest);
+  }
+  if (subcommand === 'check') {
+    return runIterateCheck(rest);
+  }
+  if (subcommand === 'seed') {
+    return runIterateSeed(rest);
+  }
+  throw new Error('Usage: ai-pm-dev iterate materialize [--target <path>] < iterate.json | iterate check [--strict] [--target <path>] | iterate seed [--target <path>]');
 }
 
 async function runPrd(args) {
@@ -2745,6 +3009,10 @@ try {
     process.stdout.write(runPlan(args));
   } else if (command === 'ship') {
     process.stdout.write(runShip(args));
+  } else if (command === 'feedback') {
+    process.stdout.write(runFeedback(args));
+  } else if (command === 'iterate') {
+    process.stdout.write(runIterate(args));
   } else if (command === 'start') {
     process.stdout.write(runStart(args));
   } else if (command === 'decide') {

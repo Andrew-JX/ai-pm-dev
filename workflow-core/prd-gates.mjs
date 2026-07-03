@@ -6,7 +6,16 @@ import {
   prdMustHaveItems,
   prdNonGoalItems,
 } from './dev-plan.mjs';
+import {
+  carriedNonGoalText,
+  iterateDispositions,
+  latestPrdNonGoalItems,
+  normalizeProductFeedbackLog,
+  prdSeedFields,
+  promotedNonGoalText,
+} from './iterate.mjs';
 import { countItems, listItems } from './items.mjs';
+import { parseFullPrdJsonStdin } from './questions.mjs';
 import {
   coveredMustHaveText,
   nonGoalsHeldText,
@@ -269,6 +278,91 @@ export const SHIP_CHECK_GATE_RULES = [
   ),
 ];
 
+export const ITERATE_GATE_RULES = [
+  required('project', 'iterate-latest-prd-session-exists', 'Latest PRD session exists', (ctx) => Boolean(ctx.latestSessionPath), 'Run ai-pm-dev prd before preparing an iterate packet.'),
+  required('project', 'iterate-latest-ship-check-exists', 'Latest ship check exists', (ctx) => ctx.exists(ctx.latestShipCheckPath), 'Run ai-pm-dev ship materialize and ship check before iterating.'),
+  required(
+    'project',
+    'iterate-linked-to-latest-prd',
+    'Iterate source is latest PRD',
+    (ctx) => Boolean(ctx.latestSessionPath) && ctx.iterate.prdSessionPath === ctx.latestSessionPath,
+    'Regenerate the iterate packet from the latest PRD session.',
+  ),
+  required(
+    'project',
+    'iterate-linked-to-latest-ship-check',
+    'Iterate source is latest ship check',
+    (ctx) => ctx.exists(ctx.latestShipCheckPath) && ctx.iterate.shipCheckPath === ctx.latestShipCheckPath,
+    'Regenerate the iterate packet from the latest ship-check.json.',
+  ),
+  required(
+    'answers',
+    'iterate-open-feedback-triaged',
+    'Every open feedback item is triaged exactly once',
+    (ctx) => ctx.iterate.openFeedbackIdsAtMaterialize.every((id) => ctx.triageCount(id) === 1)
+      && ctx.iterate.triage.every((item) => ctx.openFeedbackIdSet.has(item.feedbackId))
+      && ctx.iterate.triage.length === ctx.iterate.openFeedbackIdsAtMaterialize.length,
+    'Triage each feedback item that was open at materialize time exactly once; do not re-triage historical dispositioned items.',
+  ),
+  required(
+    'answers',
+    'iterate-triage-reasons-present',
+    'Every triage disposition has a reason',
+    (ctx) => ctx.iterate.triage.every((item) => ctx.openFeedbackIdSet.has(item.feedbackId)
+      && iterateDispositions.includes(item.disposition)
+      && item.reason.trim().length > 0),
+    'Each triage item needs a valid disposition and a non-empty reason.',
+  ),
+  required(
+    'answers',
+    'iterate-candidates-traceable',
+    'Each next must-have candidate is traceable or explicit exploration',
+    (ctx) => ctx.iterate.mustHaveCandidates.every((item) => {
+      if (!item.text.trim()) {
+        return false;
+      }
+      if (item.sourceFeedbackId) {
+        return ctx.triagedFeedbackIdSet.has(item.sourceFeedbackId);
+      }
+      return item.exploration === true && item.rationale.trim().length > 0;
+    }),
+    'Every next must-have candidate needs a triaged feedback source, or exploration=true with a rationale.',
+  ),
+  required(
+    'answers',
+    'iterate-candidates-prioritized',
+    'Next must-have candidates stay prioritized (<=3)',
+    (ctx) => ctx.iterate.mustHaveCandidates.length <= 3,
+    (ctx) => `Cut to at most 3 next must-have candidates (you listed ${ctx.iterate.mustHaveCandidates.length}).`,
+  ),
+  required(
+    'answers',
+    'iterate-non-goals-carried',
+    'Previous non-goals carry forward unless feedback promotes them',
+    (ctx) => latestPrdNonGoalItems(ctx.answers).every((nonGoal) => (
+      includesMeaningfulSnippet(carriedNonGoalText(ctx.iterate), nonGoal)
+      || includesMeaningfulSnippet(promotedNonGoalText(ctx.iterate), nonGoal)
+    )),
+    'Carry every previous PRD non-goal into carriedNonGoals, unless a feedback-backed promotedNonGoals entry explicitly elevates it.',
+  ),
+  required(
+    'answers',
+    'iterate-promoted-non-goals-backed',
+    'Promoted non-goals are backed by triaged feedback',
+    (ctx) => ctx.iterate.promotedNonGoals.every((item) => item.nonGoal.trim().length > 0
+      && ctx.triagedFeedbackIdSet.has(item.feedbackId)
+      && item.rationale.trim().length > 0),
+    'Every promoted non-goal needs a non-goal text, a feedbackId from this iterate round, and a rationale.',
+  ),
+  required(
+    'answers',
+    'iterate-seed-is-prd-json',
+    'Next PRD seed is valid prd --json input',
+    (ctx) => ctx.seedIsValidPrdJson,
+    'The materialized nextPrdSeed must contain only PRD JSON fields with scalar values.',
+  ),
+];
+
 function buildPrdContext(answers, context = {}, options = {}) {
   const resolved = resolveContext(context);
   const includeProjectState = options.includeProjectState ?? true;
@@ -338,6 +432,42 @@ function buildShipCheckContext(check, context = {}) {
   };
 }
 
+function buildIterateContext(iterate, context = {}) {
+  const resolved = resolveContext(context);
+  const answers = context.answers || {};
+  const latestSessionPath = context.latestSessionPath || resolved.sessionPath || '';
+  const latestShipCheckPath = context.latestShipCheckPath || join(resolved.sessionPath, 'ship-check.json');
+  const feedbackLog = normalizeProductFeedbackLog(context.feedbackLog || {});
+  const feedbackById = new Map(feedbackLog.feedback.map((entry) => [entry.id, entry]));
+  const openFeedbackIdSet = new Set(iterate.openFeedbackIdsAtMaterialize);
+  const triagedFeedbackIdSet = new Set(iterate.triage.map((item) => item.feedbackId));
+  const triageCount = (id) => iterate.triage.filter((item) => item.feedbackId === id).length;
+  let seedIsValidPrdJson = false;
+  try {
+    const seed = iterate.nextPrdSeed || {};
+    const unknownSeedKeys = Object.keys(seed).filter((key) => !prdSeedFields.includes(key));
+    if (!unknownSeedKeys.length) {
+      parseFullPrdJsonStdin(JSON.stringify(seed));
+      seedIsValidPrdJson = true;
+    }
+  } catch {
+    seedIsValidPrdJson = false;
+  }
+  return {
+    ...resolved,
+    answers,
+    iterate,
+    latestSessionPath,
+    latestShipCheckPath,
+    feedbackLog,
+    feedbackById,
+    openFeedbackIdSet,
+    triagedFeedbackIdSet,
+    triageCount,
+    seedIsValidPrdJson,
+  };
+}
+
 function evaluateRules(rules, ctx) {
   return rules.map((rule) => {
     const pass = rule.predicate(ctx);
@@ -361,6 +491,10 @@ export function evaluateDevPlan(plan, context = {}) {
 
 export function evaluateShipCheck(check, context = {}) {
   return evaluateRules(SHIP_CHECK_GATE_RULES, buildShipCheckContext(check, context));
+}
+
+export function evaluateIterate(iterate, context = {}) {
+  return evaluateRules(ITERATE_GATE_RULES, buildIterateContext(iterate, context));
 }
 
 export function scoreChecks(checks) {

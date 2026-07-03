@@ -52,6 +52,7 @@ export type ProjectState = {
   qualityGate: QualityGateResult;
   devPlanGate: QualityGateResult;
   shipGate: QualityGateResult;
+  iterateGate: QualityGateResult;
   openQuestions: string;
   decisions: string;
   progress: string;
