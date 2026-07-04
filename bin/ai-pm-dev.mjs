@@ -34,6 +34,12 @@ import {
   validateDevPlanStructure,
 } from '../workflow-core/dev-plan.mjs';
 import {
+  buildDesignHandoff,
+  buildDesignMarkdown,
+  validateDesignStructure,
+} from '../workflow-core/design.mjs';
+import {
+  evaluateDesign,
   evaluateDevPlan,
   evaluateIterate,
   evaluatePrd,
@@ -98,6 +104,9 @@ Usage:
   ai-pm-dev plan materialize [--target <path>] < dev-plan.json
   ai-pm-dev plan check [--strict] [--target <path>]
   ai-pm-dev plan handoff [--target <path>]
+  ai-pm-dev design materialize [--target <path>] < design.json
+  ai-pm-dev design check [--strict] [--target <path>]
+  ai-pm-dev design handoff [--target <path>]
   ai-pm-dev ship materialize [--target <path>] < ship-check.json
   ai-pm-dev ship check [--strict] [--target <path>]
   ai-pm-dev ship handoff [--target <path>]
@@ -138,6 +147,7 @@ Commands:
   init           Install workflow files into a target project.
   prd            Run an interactive PM interview and generate AI-PRD assets.
   plan           Materialize, check, or print the latest PRD-linked dev plan.
+  design         Materialize, check, or print the latest PRD-linked page structure.
   ship           Materialize, check, or print the latest PRD-linked ship check.
   feedback       Capture post-ship product feedback for next-round iteration.
   iterate        Materialize and gate a next-PRD seed from triaged feedback.
@@ -2384,6 +2394,18 @@ function readDevPlanStdin() {
   }
 }
 
+function readDesignStdin() {
+  const raw = readFileSync(0, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Usage: ai-pm-dev design materialize [--target <path>] < design.json');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid JSON stdin for design materialize.');
+  }
+}
+
 function readShipCheckStdin() {
   const raw = readFileSync(0, 'utf8').trim();
   if (!raw) {
@@ -2420,6 +2442,18 @@ function prdAnchoredPlan(plan, answers, sessionPath) {
   };
 }
 
+function prdAnchoredDesign(design, answers, sessionPath) {
+  return {
+    ...design,
+    prdSessionPath: sessionPath,
+    idea: answers.idea || '',
+    oneThing: answers.oneThing || '',
+    mustHaves: listItems(answers.mvpScope).slice(0, 3),
+    nonGoals: listItems(answers.nonGoals),
+    coreWorkflow: answers.coreWorkflow || '',
+  };
+}
+
 function prdAnchoredShipCheck(check, answers, sessionPath, latestDevPlanPath) {
   return {
     ...check,
@@ -2436,6 +2470,14 @@ function requireDevPlanStructure(raw) {
     throw new Error(`Invalid dev plan structure:\n- ${validation.errors.join('\n- ')}`);
   }
   return validation.plan;
+}
+
+function requireDesignStructure(raw) {
+  const validation = validateDesignStructure(raw);
+  if (!validation.ok) {
+    throw new Error(`Invalid design structure:\n- ${validation.errors.join('\n- ')}`);
+  }
+  return validation.design;
 }
 
 function requireShipCheckStructure(raw) {
@@ -2581,6 +2623,128 @@ function runPlan(args) {
     return runPlanHandoff(rest);
   }
   throw new Error('Usage: ai-pm-dev plan materialize [--target <path>] < dev-plan.json | plan check [--strict] [--target <path>] | plan handoff [--target <path>]');
+}
+
+function runDesignMaterialize(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const rawDesign = readDesignStdin();
+  const design = prdAnchoredDesign(requireDesignStructure(rawDesign), answers, sessionPath);
+  const designJson = `${JSON.stringify(design, null, 2)}\n`;
+  const designMarkdown = buildDesignMarkdown(design);
+  const designHandoff = buildDesignHandoff(design);
+  const docsDir = join(target, 'docs');
+  const memoryDir = join(target, 'memory');
+  const stateDir = join(target, '.ai-pm-dev');
+  const designJsonPath = join(sessionPath, 'design.json');
+  const designMarkdownPath = join(sessionPath, 'design.md');
+  const designHandoffPath = join(sessionPath, 'handoff-design.md');
+  const projectUiSpecPath = join(docsDir, 'UI_SPEC.md');
+  const promptPath = join(memoryDir, 'current-task-prompt.md');
+  const statePath = join(stateDir, 'state.json');
+
+  mkdirSync(docsDir, { recursive: true });
+  mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(designJsonPath, designJson, 'utf8');
+  writeFileSync(designMarkdownPath, designMarkdown, 'utf8');
+  writeFileSync(designHandoffPath, designHandoff, 'utf8');
+  writeFileSync(projectUiSpecPath, designMarkdown, 'utf8');
+  writeFileSync(promptPath, designHandoff, 'utf8');
+  writeFileSync(statePath, `${JSON.stringify({
+    version,
+    task: design.idea || design.goal,
+    skill: 'design-maker',
+    phase: 'Design',
+    skillPath: 'skills/design-maker/SKILL.md',
+    nextStep: 'Run ai-pm-dev design check --strict, then use handoff-design.md for UI implementation planning.',
+    prdSessionPath: sessionPath,
+    updatedAt: new Date().toISOString(),
+  }, null, 2)}\n`, 'utf8');
+  appendCheckpoint(target, 'design', design.goal || design.idea);
+
+  return `Design materialized
+
+Session: ${sessionPath}
+Artifacts:
+- ${designJsonPath}
+- ${designMarkdownPath}
+- ${designHandoffPath}
+- ${projectUiSpecPath}
+
+Next: ai-pm-dev design check --strict --target "${target}"
+`;
+}
+
+function loadLatestDesign(target) {
+  const { sessionPath, answers } = loadLatestPrdSession(target);
+  const designJsonPath = join(sessionPath, 'design.json');
+  if (!existsSync(designJsonPath)) {
+    throw new Error(`No design found for latest PRD session. Run: ai-pm-dev design materialize --target "${target}" < design.json`);
+  }
+  const design = requireDesignStructure(JSON.parse(readFileSync(designJsonPath, 'utf8')));
+  return { sessionPath, answers, design };
+}
+
+function runDesignCheck(args) {
+  const target = resolve(parseTarget(args));
+  const { sessionPath, answers, design } = loadLatestDesign(target);
+  const checks = evaluateDesign(design, { sessionPath, latestSessionPath: sessionPath, answers });
+  const score = scoreChecks(checks);
+  const reportPath = join(sessionPath, 'design-quality-report.md');
+  const reportJsonPath = join(sessionPath, 'design-quality-report.json');
+  const report = buildQualityReportMarkdown(design, checks, score, {
+    title: 'Design Quality Report',
+    generatedBy: 'ai-pm-dev design check',
+  });
+  writeFileSync(reportPath, report, 'utf8');
+  writeFileSync(reportJsonPath, `${JSON.stringify(buildQualityReportJson(design, checks, score, {
+    generatedBy: 'ai-pm-dev design check',
+    idea: design.idea,
+    sessionPath,
+  }), null, 2)}\n`, 'utf8');
+
+  const strict = args.includes('--strict');
+  if (strict && score.overall === 'FAIL') {
+    process.exitCode = 1;
+  }
+
+  return `Design Quality Check${strict ? ' (strict)' : ''}
+
+Session: ${sessionPath}
+Overall: ${score.overall} (required ${score.requiredPass}/${score.requiredTotal}, recommended ${score.recommendedPass}/${score.recommendedTotal})
+
+${checkLines(checks).join('\n')}
+
+Report: ${reportPath}${strict && score.overall === 'FAIL' ? '\n\nStrict mode: exiting non-zero because required checks failed.' : ''}
+`;
+}
+
+function runDesignHandoff(args) {
+  const target = resolve(parseTarget(args));
+  const sessionPath = latestPrdSession(target);
+  if (!sessionPath) {
+    throw new Error(`No PRD sessions found for ${target}. Run: ai-pm-dev prd --target "${target}"`);
+  }
+  const handoffPath = join(sessionPath, 'handoff-design.md');
+  if (!existsSync(handoffPath)) {
+    throw new Error(`No design handoff found for latest PRD session. Run: ai-pm-dev design materialize --target "${target}" < design.json`);
+  }
+  return readFileSync(handoffPath, 'utf8');
+}
+
+function runDesign(args) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'materialize') {
+    return runDesignMaterialize(rest);
+  }
+  if (subcommand === 'check') {
+    return runDesignCheck(rest);
+  }
+  if (subcommand === 'handoff') {
+    return runDesignHandoff(rest);
+  }
+  throw new Error('Usage: ai-pm-dev design materialize [--target <path>] < design.json | design check [--strict] [--target <path>] | design handoff [--target <path>]');
 }
 
 function runShipMaterialize(args) {
@@ -3007,6 +3171,8 @@ try {
     process.stdout.write(await runPrd(args));
   } else if (command === 'plan') {
     process.stdout.write(runPlan(args));
+  } else if (command === 'design') {
+    process.stdout.write(runDesign(args));
   } else if (command === 'ship') {
     process.stdout.write(runShip(args));
   } else if (command === 'feedback') {
