@@ -1,5 +1,6 @@
 export * from './docs.mjs';
 export * from './dev-plan.mjs';
+export * from './design.mjs';
 export * from './ship-check.mjs';
 export * from './installers.mjs';
 export * from './items.mjs';

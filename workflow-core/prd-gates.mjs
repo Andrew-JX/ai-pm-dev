@@ -7,6 +7,13 @@ import {
   prdNonGoalItems,
 } from './dev-plan.mjs';
 import {
+  builtNonGoalClaimText,
+  coveredDesignMustHaveText,
+  excludedDesignNonGoalText,
+  workflowCoveredMustHaveText,
+  workflowScreenText,
+} from './design.mjs';
+import {
   carriedNonGoalText,
   iterateDispositions,
   latestPrdNonGoalItems,
@@ -200,6 +207,90 @@ export const DEV_PLAN_GATE_RULES = [
       return /ai-prd\.md/.test(content) && /scope\.md/.test(content) && /acceptance-tests\.md/.test(content) && /dev-plan\.md/.test(content);
     },
     'handoff-build.md must reference ai-prd.md, scope.md, acceptance-tests.md, and dev-plan.md.',
+  ),
+];
+
+export const DESIGN_GATE_RULES = [
+  required('project', 'design-latest-prd-session-exists', 'Latest PRD session exists', (ctx) => Boolean(ctx.latestSessionPath), 'Run ai-pm-dev prd before materializing design.'),
+  required(
+    'project',
+    'design-linked-to-latest-prd',
+    'Design source is latest PRD',
+    (ctx) => Boolean(ctx.latestSessionPath) && ctx.design.prdSessionPath === ctx.latestSessionPath,
+    'Regenerate the design from the latest PRD session.',
+  ),
+  required('project', 'design-session-json-exists', 'Session design.json exists', (ctx) => ctx.exists(ctx.designJsonPath), 'Run ai-pm-dev design materialize.'),
+  required('project', 'design-session-markdown-exists', 'Session design.md exists', (ctx) => ctx.exists(ctx.designMarkdownPath), 'Run ai-pm-dev design materialize.'),
+  required('project', 'design-handoff-exists', 'Design handoff exists', (ctx) => ctx.exists(ctx.designHandoffPath), 'Run ai-pm-dev design materialize.'),
+  required('project', 'design-project-ui-spec-exists', 'Project docs/UI_SPEC.md exists', (ctx) => ctx.exists(ctx.projectUiSpecPath), 'Run ai-pm-dev design materialize.'),
+  required(
+    'answers',
+    'design-covers-must-haves',
+    'Every PRD must-have maps to a screen',
+    (ctx) => allSnippetsPresent(coveredDesignMustHaveText(ctx.design), prdMustHaveItems(ctx.answers)),
+    'Map every PRD must-have into at least one screen coversMustHaves entry.',
+  ),
+  required(
+    'answers',
+    'design-one-thing-in-workflow',
+    'PRD one thing appears in the core workflow',
+    (ctx) => includesMeaningfulSnippet(workflowCoveredMustHaveText(ctx.design), ctx.text('oneThing')),
+    'Make a workflowScreens screen cover the PRD oneThing.',
+  ),
+  required(
+    'answers',
+    'design-workflow-screens-present',
+    'Core workflow screens are declared',
+    (ctx) => ctx.design.workflowScreens.length > 0,
+    'Add at least one screen id to workflowScreens.',
+  ),
+  required(
+    'answers',
+    'design-workflow-screens-exist',
+    'Core workflow screens reference real screens',
+    (ctx) => ctx.design.workflowScreens.every((id) => ctx.screenIds.has(id)),
+    'Every workflowScreens id must match a screen id.',
+  ),
+  required(
+    'answers',
+    'design-core-workflow-mapped',
+    'PRD core workflow maps to workflow screens',
+    (ctx) => !ctx.has('coreWorkflow') || includesMeaningfulSnippet(workflowScreenText(ctx.design), ctx.text('coreWorkflow')),
+    'Make the ordered workflowScreens text cover the PRD coreWorkflow.',
+  ),
+  required(
+    'answers',
+    'design-no-orphan-screens',
+    'Every screen is covered or explicitly supporting',
+    (ctx) => ctx.design.screens.every((screen) => screen.coversMustHaves.length > 0 || ctx.supportingScreenIds.has(screen.id)),
+    'Each screen must cover a must-have or be listed in supportingScreens.',
+  ),
+  required(
+    'answers',
+    'design-excludes-non-goals',
+    'PRD non-goals stay excluded',
+    (ctx) => allSnippetsPresent(excludedDesignNonGoalText(ctx.design), prdNonGoalItems(ctx.answers)),
+    'Copy every PRD non-goal into excludedNonGoals.',
+  ),
+  required(
+    'answers',
+    'design-does-not-build-non-goals',
+    'Screens do not claim PRD non-goals as delivered',
+    (ctx) => prdNonGoalItems(ctx.answers).every((nonGoal) => !includesMeaningfulSnippet(builtNonGoalClaimText(ctx.design), nonGoal)),
+    'Do not put PRD non-goals in screen coversMustHaves.',
+  ),
+  required(
+    'project',
+    'design-handoff-references-sources',
+    'Design handoff references PRD and design sources',
+    (ctx) => {
+      if (!ctx.exists(ctx.designHandoffPath)) {
+        return true;
+      }
+      const content = ctx.readFile(ctx.designHandoffPath);
+      return /ai-prd\.md/.test(content) && /scope\.md/.test(content) && /design\.md/.test(content) && /docs\/UI_SPEC\.md/.test(content);
+    },
+    'handoff-design.md must reference ai-prd.md, scope.md, design.md, and docs/UI_SPEC.md.',
   ),
 ];
 
@@ -414,6 +505,36 @@ function buildDevPlanContext(plan, context = {}, options = {}) {
   };
 }
 
+function buildDesignContext(design, context = {}, options = {}) {
+  const resolved = resolveContext(context);
+  const includeProjectState = options.includeProjectState ?? true;
+  const answers = context.answers || {};
+  const text = (key) => (answers[key] || '').trim();
+  const has = (key) => text(key).length > 0;
+  const latestSessionPath = context.latestSessionPath || resolved.sessionPath || '';
+  const designJsonPath = join(resolved.sessionPath, 'design.json');
+  const designMarkdownPath = join(resolved.sessionPath, 'design.md');
+  const designHandoffPath = join(resolved.sessionPath, 'handoff-design.md');
+  const projectUiSpecPath = join(resolved.docsDir, 'UI_SPEC.md');
+  return {
+    ...resolved,
+    answers,
+    design,
+    text,
+    has,
+    latestSessionPath,
+    designJsonPath,
+    designMarkdownPath,
+    designHandoffPath,
+    projectUiSpecPath,
+    screenIds: new Set(design.screens.map((screen) => screen.id)),
+    supportingScreenIds: new Set(design.supportingScreens),
+    designMarkdown: includeProjectState ? resolved.readIfExists(designMarkdownPath) : '',
+    designHandoff: includeProjectState ? resolved.readIfExists(designHandoffPath) : '',
+    projectUiSpec: includeProjectState ? resolved.readIfExists(projectUiSpecPath) : '',
+  };
+}
+
 function buildShipCheckContext(check, context = {}) {
   const resolved = resolveContext(context);
   const answers = context.answers || {};
@@ -487,6 +608,10 @@ export function evaluateAnswerGates(answers) {
 
 export function evaluateDevPlan(plan, context = {}) {
   return evaluateRules(DEV_PLAN_GATE_RULES, buildDevPlanContext(plan, context));
+}
+
+export function evaluateDesign(design, context = {}) {
+  return evaluateRules(DESIGN_GATE_RULES, buildDesignContext(design, context));
 }
 
 export function evaluateShipCheck(check, context = {}) {

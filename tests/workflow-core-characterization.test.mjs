@@ -5,8 +5,9 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { docStatus, readProjectState } from '../apps/web/server/project-state.mjs';
+import { buildDesignHandoff, buildDesignMarkdown, validateDesignStructure } from '../workflow-core/design.mjs';
 import { buildBuildHandoff, buildDevPlanMarkdown, validateDevPlanStructure } from '../workflow-core/dev-plan.mjs';
-import { evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
+import { evaluateDesign, evaluateDevPlan, evaluatePrd, evaluateShipCheck, scoreChecks } from '../workflow-core/prd-gates.mjs';
 import { validateShipCheckStructure } from '../workflow-core/ship-check.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -295,6 +296,138 @@ try {
     assert.ok(failures.includes('PRD non-goals stay excluded'));
     assert.ok(failures.includes('Every slice has verification'));
     assert.ok(failures.includes('Slices stay reviewable'));
+  }
+
+  {
+    const answers = {
+      idea: 'AI fitness logging tool',
+      targetUsers: 'Fitness beginners',
+      painPoints: 'They cannot tell whether training improves',
+      coreWorkflow: 'Log workout, review progress, receive AI summary',
+      mvpScope: 'Workout logging; weekly summary; progress trend',
+      oneThing: 'Workout logging',
+      nonGoals: 'No social features; no medical advice',
+      acceptanceCriteria: 'A beginner understands weekly progress within five minutes',
+    };
+    const rawDesign = {
+      goal: 'Design the smallest page structure for AI fitness logging',
+      screens: [
+        {
+          id: 'home',
+          name: 'Home dashboard',
+          purpose: 'Entry point for the core flow: Log workout, review progress, receive AI summary.',
+          coversMustHaves: [],
+          keyElements: ['today summary', 'log workout action'],
+          entry: true,
+        },
+        {
+          id: 'log-workout',
+          name: 'Log workout',
+          purpose: 'Let beginners record the workout that proves the product.',
+          coversMustHaves: ['Workout logging'],
+          keyElements: ['exercise input', 'sets reps weight fields'],
+          entry: false,
+        },
+        {
+          id: 'progress',
+          name: 'Progress review',
+          purpose: 'Show progress trend and weekly summary after workouts exist.',
+          coversMustHaves: ['weekly summary', 'progress trend'],
+          keyElements: ['volume trend', 'AI summary'],
+          entry: false,
+        },
+      ],
+      workflowScreens: ['home', 'log-workout', 'progress'],
+      supportingScreens: ['home'],
+      excludedNonGoals: ['No social features in v1', 'no medical advice'],
+      openQuestions: [],
+    };
+    const validation = validateDesignStructure(rawDesign);
+    assert.equal(validation.ok, true);
+    const design = {
+      ...validation.design,
+      prdSessionPath: 'C:\\project\\.ai-pm-dev\\prd-sessions\\latest',
+      idea: answers.idea,
+      oneThing: answers.oneThing,
+      mustHaves: ['Workout logging', 'weekly summary', 'progress trend'],
+      nonGoals: ['No social features', 'no medical advice'],
+      coreWorkflow: answers.coreWorkflow,
+    };
+    const checks = evaluateDesign(design, {
+      answers,
+      sessionPath: design.prdSessionPath,
+      latestSessionPath: design.prdSessionPath,
+      exists() {
+        return true;
+      },
+      readFile(path) {
+        if (path.endsWith('handoff-design.md')) {
+          return 'Read ai-prd.md, scope.md, design.md, and docs/UI_SPEC.md first.';
+        }
+        return 'design content';
+      },
+    });
+    assert.equal(scoreChecks(checks).overall, 'PASS');
+    assert.match(buildDesignMarkdown(design), /# UI Spec: AI fitness logging tool/);
+    assert.match(buildDesignHandoff(design), /Read `ai-prd.md`, `scope.md`, `design.md`, and `docs\/UI_SPEC.md` first/);
+  }
+
+  {
+    const invalid = validateDesignStructure({ goal: 'Broken', screens: [], workflowScreens: ['missing'], supportingScreens: [], excludedNonGoals: [], openQuestions: [] });
+    assert.equal(invalid.ok, false);
+    assert.match(invalid.errors.join('\n'), /screens/);
+    assert.match(invalid.errors.join('\n'), /Referenced screen "missing"/);
+  }
+
+  {
+    const answers = {
+      coreWorkflow: 'Log workout, review progress',
+      mvpScope: 'Workout logging; weekly summary',
+      oneThing: 'Workout logging',
+      nonGoals: 'No social features',
+    };
+    const baseDesign = validateDesignStructure({
+      goal: 'Design',
+      screens: [
+        {
+          id: 'home',
+          name: 'Home',
+          purpose: 'Mentions No social features only to clarify scope.',
+          coversMustHaves: [],
+          keyElements: ['No social features are not linked here'],
+          entry: true,
+        },
+        {
+          id: 'summary',
+          name: 'Summary',
+          purpose: 'Shows weekly summary.',
+          coversMustHaves: ['weekly summary', 'No social features'],
+          keyElements: ['summary'],
+          entry: false,
+        },
+      ],
+      workflowScreens: ['home', 'summary'],
+      supportingScreens: [],
+      excludedNonGoals: [],
+      openQuestions: [],
+    }).design;
+    const checks = evaluateDesign(baseDesign, {
+      answers,
+      sessionPath: 'latest',
+      latestSessionPath: 'latest',
+      exists() {
+        return false;
+      },
+      readFile() {
+        return '';
+      },
+    });
+    const failures = checks.filter((check) => !check.pass).map((check) => check.name);
+    assert.ok(failures.includes('Every PRD must-have maps to a screen'));
+    assert.ok(failures.includes('PRD one thing appears in the core workflow'));
+    assert.ok(failures.includes('Every screen is covered or explicitly supporting'));
+    assert.ok(failures.includes('PRD non-goals stay excluded'));
+    assert.ok(failures.includes('Screens do not claim PRD non-goals as delivered'));
   }
 
   {
