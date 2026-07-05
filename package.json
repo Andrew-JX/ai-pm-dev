@@ -12,6 +12,9 @@
   },
   "files": [
     "apps",
+    "!apps/web/dist",
+    "!apps/web/node_modules",
+    "!apps/web/.vite",
     "llm",
     "workflow-core",
     "bin",

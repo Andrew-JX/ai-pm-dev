@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -155,7 +155,16 @@ try {
     const output = runNpm(['pack', '--dry-run']);
     assert.match(output, /ai-pm-dev-1\.6\.0\.tgz/);
     const packJson = JSON.parse(runNpm(['pack', '--dry-run', '--json']));
-    assert.ok(packJson[0].files.some((file) => file.path === 'workflow-core/index.mjs'));
+    const packFiles = packJson[0].files.map((file) => file.path);
+    assert.ok(packFiles.includes('workflow-core/index.mjs'));
+    assert.equal(packFiles.some((path) => path.includes('node_modules')), false);
+    assert.equal(packFiles.some((path) => path.includes('.vite')), false);
+    assert.equal(packFiles.some((path) => path.startsWith('apps/web/dist/')), false);
+    for (const memoryPath of ['memory/feedback-log.md', 'memory/rule-candidates.md', 'memory/skill-improvement-log.md']) {
+      const source = readFileSync(join(repoRoot, memoryPath), 'utf8');
+      assert.doesNotMatch(source, /E:\\studyspace/i);
+      assert.doesNotMatch(source, /quickDate/i);
+    }
     assert.equal(existsSync(join(repoRoot, 'ai-pm-dev-1.6.0.tgz')), false);
   }
 } finally {
