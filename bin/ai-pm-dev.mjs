@@ -251,7 +251,12 @@ function readConfig() {
   if (!existsSync(path)) {
     return {};
   }
-  return JSON.parse(readFileSync(path, 'utf8'));
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    console.error(`Warning: invalid AI PM Dev config at ${path}; ignoring it and using defaults.`);
+    return {};
+  }
 }
 
 function writeConfig(config) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,18 @@ const cliPath = join(repoRoot, 'bin', 'ai-pm-dev.mjs');
 
 function runCli(args, env = {}) {
   return execFileSync('node', [cliPath, ...args], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      ...env,
+    },
+  });
+}
+
+function runCliResult(args, env = {}) {
+  return spawnSync(process.execPath, [cliPath, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -80,6 +92,37 @@ try {
     runCli(['config', 'clear'], env);
     const output = runCli(['config', 'get'], env);
 
+    assert.match(output, /No default target configured/);
+  }
+
+  {
+    const configHome = mkdtempSync(join(tmpdir(), 'ai-pm-dev-config-home-'));
+    tempRoots.push(configHome);
+    const env = { AI_PM_DEV_HOME: configHome };
+    const configPath = join(configHome, 'config.json');
+    writeFileSync(configPath, '{bad json', 'utf8');
+
+    const result = runCliResult(['config', 'get'], env);
+
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /No default target configured/);
+    assert.match(result.stderr, /Warning: invalid AI PM Dev config/);
+    assert.match(result.stderr, new RegExp(configPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  {
+    const configHome = mkdtempSync(join(tmpdir(), 'ai-pm-dev-config-home-'));
+    tempRoots.push(configHome);
+    const env = { AI_PM_DEV_HOME: configHome };
+    const configPath = join(configHome, 'config.json');
+    writeFileSync(configPath, '{bad json', 'utf8');
+
+    const cleared = runCliResult(['config', 'clear'], env);
+    const output = runCli(['config', 'get'], env);
+
+    assert.equal(cleared.status, 0);
+    assert.equal(cleared.stderr, '');
+    assert.match(cleared.stdout, /AI PM Dev config cleared/);
     assert.match(output, /No default target configured/);
   }
 } finally {
