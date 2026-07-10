@@ -184,7 +184,7 @@ function runNodeScript(scriptName, args) {
   const scriptPath = join(repoRoot, 'scripts', scriptName);
   // Run in the user's working directory, not the package root, so a relative target
   // like `.` resolves against where the user actually invoked the CLI.
-  return execFileSync('node', [scriptPath, ...args], {
+  return execFileSync(process.execPath, [scriptPath, ...args], {
     cwd: process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
