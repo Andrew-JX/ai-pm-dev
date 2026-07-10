@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 - 2026-07-09 (Design stage + release hardening)
+
+Extend the local workflow with a Design stage and tighten release/package robustness discovered after v1.6.0.
+
+- Add the Design stage with `design materialize`, `design check`, and `design handoff`, including coverage and scope-spread gates for design artifacts.
+- Fix npm package contents by excluding web build caches/artifacts, keeping `memory/` as clean templates, and adding package content guard coverage.
+- Make `readConfig` gracefully degrade when `config.json` is damaged, with regression coverage for the escape path.
+- Run CLI helper scripts with `process.execPath` so child scripts use the same Node executable as the invoking CLI.
+
 ## 1.6.0 - 2026-07-04 (feedback → iterate loop)
 
 Close the post-ship learning loop by turning product feedback into deterministic iteration planning and PRD seeding.

@@ -12,7 +12,7 @@ const hardenedSkills = [
   'skills/release-builder/SKILL.md',
 ];
 
-assert.equal(pkg.version, '1.6.0');
+assert.equal(pkg.version, '1.7.0');
 assert.equal(pkg.description, 'Local Idea-to-Build workflow CLI for AI-assisted product development.');
 assert.equal(pkg.private, undefined);
 assert.equal(pkg.type, 'module');
