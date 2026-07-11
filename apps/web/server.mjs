@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { handleApiRequest } from './server/api.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 5173);
+const allowedHost = `127.0.0.1:${port}`;
+const sessionToken = randomBytes(32).toString('base64url');
 
 async function readBody(req) {
   const chunks = [];
@@ -36,7 +39,8 @@ async function start() {
           method: req.method || 'GET',
           url: req.url,
           body: await readBody(req),
-        });
+          headers: req.headers,
+        }, { allowedHost, sessionToken });
         res.statusCode = result.status;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify(result.body));

@@ -4,11 +4,34 @@ import type { ArtifactSummary, ClarificationResponse, ProjectState } from './typ
 import './styles.css';
 
 const defaultTarget = new URLSearchParams(window.location.search).get('target') || '';
+let sessionTokenRequest: Promise<string> | null = null;
+
+function getSessionToken(): Promise<string> {
+  if (!sessionTokenRequest) {
+    sessionTokenRequest = fetch('/api/session')
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.token) {
+          throw new Error(data.error || 'Unable to start a secure session');
+        }
+        return String(data.token);
+      })
+      .catch((error) => {
+        sessionTokenRequest = null;
+        throw error;
+      });
+  }
+  return sessionTokenRequest;
+}
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const sessionToken = await getSessionToken();
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  headers.set('X-AI-PM-Dev-Session', sessionToken);
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   const data = await response.json();
   if (!response.ok) {

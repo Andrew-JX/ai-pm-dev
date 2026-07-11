@@ -54,12 +54,23 @@ function parseJsonOutput(result) {
   }
 }
 
-export async function handleApiRequest(request) {
+export async function handleApiRequest(request, security) {
   const url = new URL(request.url, 'http://localhost');
   const method = request.method.toUpperCase();
 
+  if (request.headers?.host !== security.allowedHost) {
+    return json(403, { error: 'forbidden' });
+  }
+
+  if (method === 'POST' && request.headers?.['x-ai-pm-dev-session'] !== security.sessionToken) {
+    return json(403, { error: 'forbidden' });
+  }
+
+  if (method === 'GET' && url.pathname === '/api/session') {
+    return json(200, { token: security.sessionToken });
+  }
+
   if (method === 'GET' && url.pathname === '/api/project') {
-    // `target` is a trusted local path; if this server is ever exposed beyond localhost, add path allowlisting/validation first.
     const target = url.searchParams.get('target') || process.cwd();
     return json(200, readProjectState(target));
   }

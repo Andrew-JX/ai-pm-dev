@@ -4,11 +4,26 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { handleApiRequest } from '../apps/web/server/api.mjs';
+import { handleApiRequest as rawHandleApiRequest } from '../apps/web/server/api.mjs';
 import { docStatus, readProjectState } from '../apps/web/server/project-state.mjs';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cliPath = join(repoRoot, 'bin', 'ai-pm-dev.mjs');
+const apiSecurity = {
+  allowedHost: '127.0.0.1:5173',
+  sessionToken: 'test-session-token',
+};
+
+function handleApiRequest(request) {
+  return rawHandleApiRequest({
+    ...request,
+    headers: {
+      host: apiSecurity.allowedHost,
+      'x-ai-pm-dev-session': apiSecurity.sessionToken,
+      ...request.headers,
+    },
+  }, apiSecurity);
+}
 
 function runCli(args, options = {}) {
   return execFileSync(process.execPath, [cliPath, ...args], {
@@ -197,6 +212,72 @@ try {
     const target = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-api-'));
     tempRoots.push(target);
     runCli(['init', target]);
+
+    const session = await rawHandleApiRequest({
+      method: 'GET',
+      url: '/api/session',
+      body: '',
+      headers: { host: apiSecurity.allowedHost },
+    }, apiSecurity);
+    assert.equal(session.status, 200);
+    assert.equal(session.body.token, apiSecurity.sessionToken);
+
+    const reboundSession = await rawHandleApiRequest({
+      method: 'GET',
+      url: '/api/session',
+      body: '',
+      headers: { host: 'attacker.example:5173' },
+    }, apiSecurity);
+    assert.equal(reboundSession.status, 403);
+
+    const reboundProject = await rawHandleApiRequest({
+      method: 'GET',
+      url: `/api/project?target=${encodeURIComponent(target)}`,
+      body: '',
+      headers: { host: 'attacker.example:5173' },
+    }, apiSecurity);
+    assert.equal(reboundProject.status, 403);
+
+    const missingHost = await rawHandleApiRequest({
+      method: 'GET',
+      url: '/api/session',
+      body: '',
+      headers: {},
+    }, apiSecurity);
+    assert.equal(missingHost.status, 403);
+
+    const rejectedTarget = mkdtempSync(join(tmpdir(), 'ai-pm-dev-web-csrf-'));
+    tempRoots.push(rejectedTarget);
+    runCli(['init', rejectedTarget]);
+    const decisionLog = join(rejectedTarget, 'docs', 'decision-log.md');
+    rmSync(decisionLog);
+
+    const missingToken = await rawHandleApiRequest({
+      method: 'POST',
+      url: '/api/decision',
+      body: JSON.stringify({ target: rejectedTarget, decision: 'must not be written' }),
+      headers: { host: apiSecurity.allowedHost },
+    }, apiSecurity);
+    assert.equal(missingToken.status, 403);
+    assert.equal(existsSync(decisionLog), false);
+
+    const wrongToken = await rawHandleApiRequest({
+      method: 'POST',
+      url: '/api/decision',
+      body: JSON.stringify({ target: rejectedTarget, decision: 'still must not be written' }),
+      headers: { host: apiSecurity.allowedHost, 'x-ai-pm-dev-session': 'wrong-token' },
+    }, apiSecurity);
+    assert.equal(wrongToken.status, 403);
+    assert.equal(existsSync(decisionLog), false);
+
+    const wrongHost = await rawHandleApiRequest({
+      method: 'POST',
+      url: '/api/decision',
+      body: JSON.stringify({ target: rejectedTarget, decision: 'never write this' }),
+      headers: { host: 'attacker.example:5173', 'x-ai-pm-dev-session': apiSecurity.sessionToken },
+    }, apiSecurity);
+    assert.equal(wrongHost.status, 403);
+    assert.equal(existsSync(decisionLog), false);
 
     const projectBefore = await handleApiRequest({
       method: 'GET',
