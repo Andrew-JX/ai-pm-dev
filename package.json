@@ -1,6 +1,6 @@
 {
   "name": "ai-pm-dev",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Local Idea-to-Build workflow CLI for AI-assisted product development.",
   "license": "MIT",
   "type": "module",

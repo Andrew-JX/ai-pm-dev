@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.1 - 2026-07-11 (Web security hardening)
+
+- Add an automated web bundle secret-scan test that builds `apps/web` and fails if the bundle contains Anthropic imports or API-key fragments (previously a manual-only check).
+- Harden the web workbench `/api` against CSRF: per-start session token required on `POST` via a custom header, an allowlisted `Host` check on every request, and a `GET /api/session` token endpoint gated by the same `Host` check to close DNS-rebinding.
+
 ## 1.7.0 - 2026-07-09 (Design stage + release hardening)
 
 Extend the local workflow with a Design stage and tighten release/package robustness discovered after v1.6.0.
